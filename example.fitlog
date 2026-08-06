@@ -19,8 +19,10 @@
 2026-08-05 09:30 bp  118/76 mmHg
   position: seated
 
-; TODO: duration and distance should be measurements associated with this activity
-; TODO: activity should have a type - "hike" vs "run" vs "lift"
+; TODO: duration and distance should be measurements associated with this
+; activity
+; TODO: activity should have a type that is declared ahead-of-time like metrics
+; are - "hike" vs "run" vs "lift"
 2026-08-05 * "Cougar Mountain loop" #hiking
   duration: 2.5 h
   distance: 6.1 mi

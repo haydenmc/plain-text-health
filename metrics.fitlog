@@ -1,9 +1,10 @@
-; Default metrics
+; Default metric definitions
 ;
 ; Metrics are used to declare what types of measurements will be tracked in the
 ; plain-text-health data store.
 ;
-; Syntax: metric <name> <unit> [additive] [metadata]
+; Definition syntax:
+; metric <name> <unit> [additive] [metadata]
 ;
 ; [additive] is an optional flag that indicates measures should be summed if
 ; multiple are defined over the same period. (ex. for sleep hours, naps should
@@ -20,13 +21,13 @@
 ;
 ; The syntax for declaring an alias is:
 ;
-; metric <name> = <metric_a> / <metric_b> [/] [metric_c] ...
+; metric <name> = <metric_a> / <metric_b> [/ <metric_c> ...]
 ;
 
-metric weight   lb                range: 50..500
+metric weight   lb               range: 50..500
 metric bodyfat  %                 range: 3..60
 metric steps    steps   additive  range: 0..100000
-metric sleep    hours   additive  range: 0..24
+metric sleep    hr      additive  range: 0..24
 metric bp_sys   mmHg              range: 60..250
 metric bp_dia   mmHg              range: 30..150
 metric bp = bp_sys / bp_dia

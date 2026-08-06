@@ -1,0 +1,40 @@
+; Default exercise definitions
+;
+; An exercise is recorded within an activity and allows you to define the
+; precise type and amount of work you did. Ex. bench_press, lap_400m, plank.
+;
+; An exercise has a name and 1 - 4 "slots" where you can record load, reps,
+; duration, and/or distance.
+;
+; Definition syntax:
+;   exercise <name> <slot> [slot...]
+;
+; [slot] can be one of `load`, `reps`, `duration`, `distance`
+;
+; `load` is measured in mass, which can be one of `lb`, `kg`
+; `reps` is measured in count, which is unitless
+; `duration` is measured in time, which is one of `sec`, `min`, `hr`
+; `distance` is measured in distance, which is one of `m`, `km`, `mi`, `ft`, `yd`
+;
+; Record syntax:
+;   2026-08-05 lift "My Lifting Activity"
+;     <exercise_name> <exercise_slot_value...>
+;
+; When recording an exercise, values for all defined slots must be specified.
+;
+; Slash-listing may be used on up to one slot to repeat that exercise with the
+; specified slot values. The other slot values are copied to each repeated
+; record.
+;
+; Example of bench press with 185 lb of weight across 5 reps, 5 reps, 4 reps:
+;   bench_press 185 lb 5/5/4
+;
+; Example of 400m lap with varying durations:
+;   lap_400m 92/94/91 sec
+;
+; Commas can be used as a shorthand for definition repeated exercises with
+; different values.
+;
+; Example of multiple farmer carrys:
+;   farmer_carry 90 lb 40/40/35 m, 70 lb 45 m
+

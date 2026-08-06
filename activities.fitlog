@@ -1,0 +1,13 @@
+; Default activity definitions
+;
+; An activity, as opposed to a metric, is a single event that may have multiple
+; metrics, exercises, documents, or other metadata associated with it.
+;
+; Definition syntax:
+;   activity <name>
+;
+; Record syntax:
+;   <date> [time] <activity> ["description"] [#tags...]
+
+activity run
+activity hike
