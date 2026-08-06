@@ -4,7 +4,7 @@
 ; plain-text-health data store.
 ;
 ; Definition syntax:
-; metric <name> <unit> [additive] [metadata]
+;   metric <name> <unit> [additive] [metadata]
 ;
 ; [additive] is an optional flag that indicates measures should be summed if
 ; multiple are defined over the same period. (ex. for sleep hours, naps should
@@ -24,7 +24,7 @@
 ; metric <name> = <metric_a> / <metric_b> [/ <metric_c> ...]
 ;
 
-metric weight   lb               range: 50..500
+metric weight   lb                range: 50..500
 metric bodyfat  %                 range: 3..60
 metric steps    steps   additive  range: 0..100000
 metric sleep    hr      additive  range: 0..24

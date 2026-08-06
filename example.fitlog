@@ -4,28 +4,28 @@
 ; data (*) that represent an example day's worth of health/fitness information.
 ;
 ; Measurement syntax:
-; <date> [time] <metric> <value> [unit] [, <metric> <value> [unit]...]
-;   metadata_1: metadata_value
-;   metadata_2: metadata_value
+;   <date> [time] <metric> <value> [unit] [, <metric> <value> [unit]...]
+;     metadata_1: "metadata_value"
+;     metadata_2: "metadata_value"
 ;
 ; Activity syntax:
-; <date> [time] * "<description>" [#tags...]
-;   metadata_1: metadata_value
-;   metadata_2: metadata_value
+;   <date> [time] * "<description>" [#tags...]
+;     metadata_1: "metadata_value"
+;     metadata_2: metadata_value
 
 2026-08-05 08:12 weight 178.4 lb, bodyfat 18.2 %
-  document: assets/2026/2026-08-05-progress.jpg
+  document: "assets/2026/2026-08-05-progress.jpg"
 
 2026-08-05 09:30 bp  118/76 mmHg
-  position: seated
+  position: "seated"
 
 ; TODO: duration and distance should be measurements associated with this
 ; activity
 ; TODO: activity should have a type that is declared ahead-of-time like metrics
 ; are - "hike" vs "run" vs "lift"
 2026-08-05 * "Cougar Mountain loop" #hiking
-  duration: 2.5 h
-  distance: 6.1 mi
+  duration 2.5 h, distance 6.1 mi
+  avg_hr 148 bpm
   document: assets/2026/gpx/2026-08-05-cougar.gpx
 
 2026-08-05 steps 4526
