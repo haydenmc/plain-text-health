@@ -12,8 +12,8 @@ entry that make up the entire fitness/health database managed by
 
 ## Comments
 
-Anything after a `;` on the same line is ignored by the parser. This is used for
-writing comments.
+Anything after a `;` on the same line is ignored by the parser, except inside
+quoted strings. This is used for writing comments.
 
 Example:
 
@@ -37,7 +37,7 @@ files. Pragma directives always start with `!`.
 
 #### Include
 
-Use `!include <file>` to process the referenced file's directives as part of the
+Use `!include "<file>"` to process the referenced file's directives as part of the
 same database.
 
 Since `plain-text-health` only accepts a single entrypoint filename, it's
@@ -47,15 +47,18 @@ your records.
 Example:
 
 ```fitlog
-!include declarations.fitlog
-!include 2025.fitlog
-!include 2026.fitlog
+!include "declarations.fitlog"
+!include "2025.fitlog"
+!include "2026.fitlog"
 ```
 
 ### Declarations
 
 Provides information on a specific type of data that may be used by other
 directives. There are multiple kinds of Declaration.
+
+Every declaration has a `name`. `name` can be any combination of letters,
+numbers, hyphens, and underscores, but must start with a letter or underscore.
 
 #### Metric
 
@@ -64,8 +67,8 @@ Entries.
 
 Syntax: `metric <name> <unit> [additive]`
 
-`additive` is an optional flag that indicates whether multiple entries
-on the same day should sum together (ex. steps or calories).
+`additive` is an optional flag that indicates whether entries on the same day
+sum together rather than indicate a single measured value.
 
 Example:
 
@@ -75,6 +78,34 @@ metric bodyfat %
 metric steps steps additive
 metric calories kcal additive
 ```
+
+##### Additive Metrics
+
+Marking a metric `additive` is meant to indicate it will be used as part of a
+"running total" for that day. This is for things like sleep, calories, steps,
+etc. that may be measured multiple times in a day, but ultimately sum toward a
+total day value.
+
+If you define a metric entry on a date without a time, that is considered the
+value for the entire day. 
+
+```fitlog
+2026-08-05 sleep 450 min
+```
+
+If you define multiple metric entries on the same date with distinct times,
+those values are considered individual occurrences, and will sum together to
+determine the total date value.
+
+```fitlog
+2026-08-05 08:30 sleep 300 min   ; last night
+2026-08-05 15:30 sleep 90 min    ; afternoon nap — sums to 390
+```
+
+A metric defined within an activity belongs to that activity, not the day. For
+example, steps defined in a hike activity will not count for the day's steps.
+Those should be recorded in a separate entry for the day.
+
 
 #### Compound Metrics
 
@@ -154,16 +185,19 @@ Example:
 
 #### Metadata
 
-Metadata is unstructured data that needs no declaration in advance. It can be
-associated with any entry by defining `key: value` on indented lines beneath the
-entry.
+Metadata is arbitrary string data that needs no declaration in advance. It can
+be defined with any entry by defining `key: "value"` on indented lines beneath
+the entry.
+
+Note: Every metadata value must be a string surrounded in double quotes. Using
+the double-quote character `"` in a metadata value is not currently supported.
 
 Example:
 
 ```fitlog
 2026-08-05 08:12 weight 165.0 lb
-  note: Hit my goal today!!
-  document: assets/2026/2026-08-05-weight-loss-progress-picture.jpg
+  note: "Hit my goal today!!"
+  document: "assets/2026/2026-08-05-weight-loss-progress-picture.jpg"
 ```
 
 #### Metrics Entry
@@ -172,7 +206,7 @@ A Metrics entry records one or more measurements for a particular day or time.
 
 Syntax: `YYYY-MM-DD [HH:MM] <metric> <value> [unit] [, metric value unit...] [#tags...]`
 
-Units are optional. If they are ommitted, they will be inferred to match the
+Units are optional. If they are omitted, they will be inferred to match the
 declaration. If they are specified, they must match the declaration.
 
 Multiple metrics can be specified by separating them with a comma, or you can
@@ -203,6 +237,8 @@ the declaration, followed by a value for each slot (load, reps, duration,
 and/or distance).
 
 Commas can be used as a shorthand for repeated exercises with different values.
+The name of the exercise is only stated once, followed by values for each entry
+separated by commas.
 Ex. `farmer_carry 90 lb 40 m, 70 lb 45 m`
 
 Slash-listing may be used on up to one slot to repeat that exercise with the
@@ -217,10 +253,10 @@ Example:
 ```fitlog
 2026-08-05 lift "Thursday Night Gym Session" #upperbody
   bench_press 185 lb 5/5/4
-  dumbell_curl 45 lb 6/6/5
-  dumbell_shoulder_press 65 lb 7/6/6
+  dumbbell_curl 45 lb 6/6/5
+  dumbbell_shoulder_press 65 lb 7/6/6
   avg_hr 148 bpm
-  document: assets/2026/2026-08-05-my-huge-throbbing-muscles.jpg
+  document: "assets/2026/2026-08-05-my-huge-throbbing-muscles.jpg"
 ```
 
 ## Rough Architecture
