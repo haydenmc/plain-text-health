@@ -1,13 +1,11 @@
 //! Parser for turning tokenized `.fitlog` files into a series of directives
 //! that will be used for populating the in-memory data model.
 
+use logos::Logos;
+
 use crate::{
-    directives::Ident,
-    directives::Span,
-    lexer::{
-        Token,
-        token_name,
-    },
+    directives::{Directive, Ident, MetricAliasDecl, MetricDecl, Span},
+    lexer::{Token, token_name},
 };
 
 type Lexed = (Result<Token, ()>, Span);
@@ -194,4 +192,148 @@ impl<'src> Parser<'src> {
     fn skip_blank_lines(&mut self) {
         while self.eat_newline() {}
     }
+
+    /// Skip to the start of the next top-level (unindented) line, or EOF.
+    /// Helps to recover from errors and other bad state that might prevent us
+    /// from continuing to parse successfully.
+    fn synchronize(&mut self) {
+        loop {
+            if self.at_eof() {
+                return;
+            }
+            if self.at_newline() && !self.newline_is_indented() {
+                self.eat_newline();
+                return;
+            }
+            self.advance();
+        }
+    }
+
+    /// Directive must end here: newline (consumed) or EOF.
+    /// Trailing tokens are an error.
+    fn end_of_directive(&mut self) -> PResult<()> {
+        if self.at_eof() || self.eat_newline() {
+            return Ok(());
+        }
+        let sp = self.peek().map(|(_, s)| s.clone()).unwrap();
+        Err(ParseError {
+            msg: format!("Unexpected `{}` after directive", self.slice(&sp)),
+            span: sp,
+        })
+    }
+
+    fn parse_entry(&mut self) -> PResult<Directive> {
+        todo!()
+    }
+
+    fn parse_pragma(&mut self) -> PResult<Directive> {
+        todo!()
+    }
+
+    /// Parse a matric declaration directive
+    /// Syntax: `metric <name> <unit> [additive]`
+    fn parse_metric_decl(&mut self) -> PResult<Directive> {
+        // Caller has already confirmed that the word is "metric"
+        let keyword = self.expect(Token::Word)?;
+        let name = self.word()?;
+
+        // Handle compound metrics
+        // Syntax: `metric <name> = <metric_a> / <metric_b> [/ <metric_c> ...]`
+        if self.eat(Token::Equals) {
+            let mut components = vec![self.word()?];
+            while self.eat(Token::ForwardSlash) {
+                components.push(self.word()?);
+            }
+            let span = keyword.start..self.prev_end();
+            self.end_of_directive()?;
+            return Ok(Directive::MetricAlias(MetricAliasDecl {
+                name,
+                composed_metric_names: components,
+                span,
+            }));
+        }
+
+        // Non-compound metrics
+        let unit = self.word()?;
+        let is_additive = self.eat_word("additive");
+        let span = keyword.start..self.prev_end();
+        self.end_of_directive()?;
+        Ok(Directive::Metric(MetricDecl {
+            name,
+            unit,
+            is_additive,
+            span,
+        }))
+    }
+
+    fn parse_activity_decl(&mut self) -> PResult<Directive> {
+        todo!()
+    }
+
+    fn parse_exercise_decl(&mut self) -> PResult<Directive> {
+        todo!()
+    }
+
+    fn parse_directive(&mut self) -> PResult<Directive> {
+        match self.peek() {
+            // Lines beginning with dates always indicate an Entry Directive
+            Some((Ok(Token::Date), _)) => self.parse_entry(),
+            // Lines beginning with a bang `!` always indicate a Pragma Directive
+            Some((Ok(Token::Bang), _)) => self.parse_pragma(),
+            // Lines beginning with a word could be one of several directives
+            Some((Ok(Token::Word), sp)) => {
+                let sp = sp.clone();
+                match self.slice(&sp) {
+                    "metric" => self.parse_metric_decl(),
+                    "activity" => self.parse_activity_decl(),
+                    "exercise" => self.parse_exercise_decl(),
+                    other => Err(ParseError {
+                        msg: format!(
+                            "Unknown directive `{other}` - expected `metric`, `activity`, `exercise`, or a dated entry."
+                        ),
+                        span: sp,
+                    }),
+                }
+            }
+            // Invalid directive token
+            Some((_, sp)) => Err(ParseError {
+                msg: "Expected a directive".into(),
+                span: sp.clone(),
+            }),
+            None => unreachable!("callers should ensure at_eof is false"),
+        }
+    }
+
+    fn run(mut self) -> (Vec<Directive>, Vec<ParseError>) {
+        let mut out = Vec::new();
+        loop {
+            self.skip_blank_lines();
+            if self.at_eof() {
+                break;
+            }
+            match self.parse_directive() {
+                Ok(d) => out.push(d),
+                Err(e) => {
+                    self.errors.push(e);
+                    self.synchronize();
+                }
+            }
+        }
+        (out, self.errors)
+    }
+}
+
+pub fn parse(src: &str) -> (Vec<Directive>, Vec<ParseError>) {
+    let toks = Token::lexer(src)
+        .spanned()
+        // Comments are filtered out here before they reach parser logic
+        .filter(|(t, _)| !matches!(t, Ok(Token::Comment)))
+        .collect();
+    Parser {
+        src,
+        toks,
+        pos: 0,
+        errors: Vec::new(),
+    }
+    .run()
 }

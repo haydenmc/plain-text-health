@@ -30,7 +30,7 @@ pub enum Token {
 
     // Punctuation:
     #[token("!")]
-    Exclamation,
+    Bang,
     #[token(",")]
     Comma,
     #[token(":")]
@@ -56,7 +56,7 @@ pub fn token_name(tok: &Token) -> &'static str {
         Token::Str => "a \"string\"",
         Token::Word => "a name",
         Token::Tag => "a #tag",
-        Token::Exclamation => "an exclamation (`!`)",
+        Token::Bang => "an exclamation point (`!`)",
         Token::Comma => "a comma (`,`)",
         Token::Colon => "a colon (`:`)",
         Token::ForwardSlash => "a forward slash (`/`)",
