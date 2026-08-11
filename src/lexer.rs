@@ -5,9 +5,9 @@
 use logos::Logos;
 
 /// Represents a single lexer token
-#[derive(Logos, Debug, Clone, PartialEq)]
+#[derive(Logos, Debug, Clone, Eq, PartialEq, Copy)]
 #[logos(skip r"[ \t]+")]
-enum Token {
+pub enum Token {
     // Literals:
     /// Calendar date YYYY-MM-DD
     #[regex(r"\d{4}-\d{2}-\d{2}")]
@@ -16,8 +16,8 @@ enum Token {
     #[regex(r"\d{2}:\d{2}")]
     Time,
     /// Any positive/negative number with optional decimal places
-    #[regex(r"-?\d+(\.\d+)?", |lex| lex.slice().parse::<f64>().ok())]
-    Number(f64),
+    #[regex(r"-?\d+(\.\d+)?")]
+    Number,
     /// Quoted string
     #[regex(r#""[^"\n]*""#)]
     Str,
@@ -29,22 +29,41 @@ enum Token {
     Tag,
 
     // Punctuation:
+    #[token("!")]
+    Exclamation,
     #[token(",")]
     Comma,
     #[token(":")]
     Colon,
     #[token("/")]
-    Slash,
+    ForwardSlash,
     #[token("=")]
     Equals,
-    #[token("..")]
-    DotDot,
 
     // Structure:
     #[regex(r"\r?\n[ \t]*")]
     Newline,
     #[regex(r";[^\n]*", allow_greedy = true)]
     Comment,
+}
+
+/// Returns a friendly name for a given token for use with error messages
+pub fn token_name(tok: &Token) -> &'static str {
+    match tok {
+        Token::Date => "a date (`YYYY-MM-DD`)",
+        Token::Time => "a time (`HH:MM`)",
+        Token::Number => "a number",
+        Token::Str => "a \"string\"",
+        Token::Word => "a name",
+        Token::Tag => "a #tag",
+        Token::Exclamation => "an exclamation (`!`)",
+        Token::Comma => "a comma (`,`)",
+        Token::Colon => "a colon (`:`)",
+        Token::ForwardSlash => "a forward slash (`/`)",
+        Token::Equals => "an equals sign (`=`)",
+        Token::Newline => "an end-of-line",
+        Token::Comment => "a semicolon (`;`)",
+    }
 }
 
 #[cfg(test)]
@@ -79,16 +98,13 @@ mod tests {
     #[test]
     fn lex_metric_definition() {
         assert_eq!(
-            lex_tokens("metric weight lb range: 50..500"),
+            lex_tokens("metric weight lb"),
             [
                 Token::Word,
                 Token::Word,
                 Token::Word,
                 Token::Word,
                 Token::Colon,
-                Token::Number(50.0),
-                Token::DotDot,
-                Token::Number(500.0),
             ]
         )
     }
@@ -98,7 +114,7 @@ mod tests {
         use Token::*;
         assert_eq!(
             lex_tokens("metric bp = bp_sys / bp_dia"),
-            [Word, Word, Equals, Word, Slash, Word]
+            [Word, Word, Equals, Word, ForwardSlash, Word]
         )
     }
 
@@ -113,11 +129,11 @@ mod tests {
                 Date,
                 Time,
                 Word,
-                Number(178.4),
+                Number,
                 Word,
                 Comma,
                 Word,
-                Number(18.2),
+                Number,
                 Word,
                 Newline,
                 Word,
@@ -160,15 +176,15 @@ mod tests {
                 Tag,
                 Newline,
                 Word,
-                Number(2.5),
+                Number,
                 Word,
                 Comma,
                 Word,
-                Number(6.1),
+                Number,
                 Word,
                 Newline,
                 Word,
-                Number(148.0),
+                Number,
                 Word,
                 Newline,
                 Word,

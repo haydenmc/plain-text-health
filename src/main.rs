@@ -1,4 +1,6 @@
 mod lexer;
+mod parser;
+mod directives;
 
 use std::path::PathBuf;
 
