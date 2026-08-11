@@ -337,3 +337,142 @@ pub fn parse(src: &str) -> (Vec<Directive>, Vec<ParseError>) {
     }
     .run()
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        directives::Directive, lexer::{Token, token_name}, parser::{ParseError, parse},
+    };
+
+    fn parse_ok(src: &str) -> Vec<Directive> {
+        let (dirs, errs) = parse(src);
+        assert!(errs.is_empty(), "unexpected errors: {errs:#?}");
+        dirs
+    }
+
+    fn parse_errs(src: &str) -> Vec<ParseError> {
+        parse(src).1
+    }
+
+    #[test]
+    fn empty_file() {
+        let dirs = parse_ok("");
+        assert_eq!(dirs.len(), 0);
+    }
+
+    #[test]
+    fn comment_only_file() {
+        let dirs = parse_ok(
+            r";this is a test
+
+; to make sure files that ; are just comments
+; parse successfully
+",
+        );
+        assert_eq!(dirs.len(), 0);
+    }
+
+    #[test]
+    fn basic_metric() {
+        let dirs = parse_ok("metric weight lb");
+        let [Directive::Metric(m)] = &dirs[..] else {
+            panic!("expected one metric, got {dirs:#?}")
+        };
+        assert_eq!(m.name.text, "weight");
+        assert_eq!(m.unit.text, "lb");
+        assert!(!m.is_additive);
+    }
+
+    #[test]
+    fn metric_with_percent_unit() {
+        let dirs = parse_ok("metric bodyfat %");
+        let [Directive::Metric(m)] = &dirs[..] else {
+            panic!("expected one metric, got {dirs:#?}")
+        };
+        assert_eq!(m.name.text, "bodyfat");
+        assert_eq!(m.unit.text, "%");
+        assert!(!m.is_additive);
+    }
+
+    #[test]
+    fn metric_with_additive() {
+        let dirs = parse_ok("metric steps count additive");
+        let [Directive::Metric(m)] = &dirs[..] else {
+            panic!("expected one metric, got {dirs:#?}")
+        };
+        assert_eq!(m.name.text, "steps");
+        assert_eq!(m.unit.text, "count");
+        assert!(m.is_additive);
+    }
+
+    #[test]
+    fn metric_with_hyphen_name() {
+        let dirs = parse_ok("metric dance-time min additive");
+        let [Directive::Metric(m)] = &dirs[..] else {
+            panic!("expected one metric, got {dirs:#?}")
+        };
+        assert_eq!(m.name.text, "dance-time");
+        assert_eq!(m.unit.text, "min");
+        assert!(m.is_additive);
+    }
+
+    #[test]
+    fn metric_alias() {
+        let dirs = parse_ok("metric bp = bp_sys / bp_dia");
+        let [Directive::MetricAlias(m)] = &dirs[..] else {
+            panic!("expected one metric alias, got {dirs:#?}")
+        };
+        assert_eq!(m.name.text, "bp");
+        assert_eq!(m.composed_metric_names.get(0).unwrap().text, "bp_sys");
+        assert_eq!(m.composed_metric_names.get(1).unwrap().text, "bp_dia");
+    }
+
+    #[test]
+    fn metric_alias_four() {
+        let dirs = parse_ok("metric crazy = one / two / three / four");
+        let [Directive::MetricAlias(m)] = &dirs[..] else {
+            panic!("expected one metric alias, got {dirs:#?}")
+        };
+        assert_eq!(m.name.text, "crazy");
+        assert_eq!(m.composed_metric_names.get(0).unwrap().text, "one");
+        assert_eq!(m.composed_metric_names.get(1).unwrap().text, "two");
+        assert_eq!(m.composed_metric_names.get(2).unwrap().text, "three");
+        assert_eq!(m.composed_metric_names.get(3).unwrap().text, "four");
+    }
+
+    #[test]
+    fn incomplete_metric() {
+        let errs = parse_errs("metric");
+        let [error] = &errs[..] else {
+            panic!("expected one parse error, got {errs:#?}")
+        };
+        assert!(error.msg.contains(token_name(&Token::Word)));
+    }
+
+    #[test]
+    fn incomplete_metric_unit() {
+        let errs = parse_errs("metric weight");
+        let [error] = &errs[..] else {
+            panic!("expected one parse error, got {errs:#?}")
+        };
+        assert!(error.msg.contains(token_name(&Token::Word)));
+    }
+
+    #[test]
+    fn extra_metric_words() {
+        let errs = parse_errs("metric weight lb extra");
+        let [error] = &errs[..] else {
+            panic!("expected one parse error, got {errs:#?}")
+        };
+        assert!(error.msg.contains("Unexpected"));
+    }
+
+    #[test]
+    fn unknown_directive() {
+        let errs = parse_errs("pooplol");
+        let [error] = &errs[..] else {
+            panic!("expected one parse error, got {errs:#?}")
+        };
+        assert!(error.msg.contains("Unknown directive"));
+    }
+}
