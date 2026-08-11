@@ -103,8 +103,6 @@ mod tests {
                 Token::Word,
                 Token::Word,
                 Token::Word,
-                Token::Word,
-                Token::Colon,
             ]
         )
     }

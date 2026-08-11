@@ -76,73 +76,59 @@ pub struct ActivityDecl {
     pub span: Span,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActivityHeader {
+    pub name: Ident,
+    pub description: Option<String>,
+    pub span: Span,
+}
+
+/// An indented record line within an Entry.
+/// Can represent either an exercise or a metric measurement.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecordLine {
+    pub name: Ident,
+    pub segments: Vec<RecordSegment>,
+    pub span: Span,
+}
+
+/// A single record segment contained within a record line.
+/// Multiple record segments may be declared with commas between them.
+/// ex. `weight 165 lb, bodyfat 15 %` is two RecordSegments, both with a single
+/// RecordValue
+/// For exercises, each value will be associated to a slot, and is nameless
+/// ex. `6/5/4 25 lb, 3 20 lb` is two RecordSegments, each with two RecordValues
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecordSegment {
+    pub name: Option<Ident>,
+    pub values: Vec<RecordValue>,
+    pub span: Span,
+}
+
+/// A single value, or set of slash-listed values, with optional unit.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecordValue {
+    pub value: RecordValueKind,
+    pub unit: Option<Ident>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecordValueKind {
+    Single(f64),
+    List(Vec<f64>),
+}
+
 /// An Entry is a directive that records data, as opposed to declaration
 /// directives that define what sort of data can be recorded.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Entry {
     pub date: (u16, u8, u8), // YYYY, MM, DD
     pub time: Option<(u8, u8)>, // HH, MM
-    pub kind: EntryKind,
+    pub activity: Option<ActivityHeader>,
+    pub records: Vec<RecordLine>,
     pub tags: Vec<String>,
     pub metadata: Vec<MetaItem>,
-    pub span: Span,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum EntryKind {
-    Measurements(Vec<Measurement>),
-    Activity {
-        name: Ident,
-        description: Option<String>,
-        measurements: Vec<Measurement>,
-        exercises: Vec<Exercise>,
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum MeasureValue {
-    Scalar(f64),
-    Compound(Vec<f64>),
-}
-
-/// A measurement and its value defined within an Entry
-#[derive(Debug, Clone, PartialEq)]
-pub struct Measurement {
-    pub metric: Ident,
-    pub value: MeasureValue,
-    pub unit: Option<Ident>,
-    pub span: Span,
-}
-
-/// Slash listing is a shorthand for recording multiple values for the same
-/// slot (ex. 6/5/4 reps)
-#[derive(Debug, Clone, PartialEq)]
-pub enum SlotValueKind {
-    Single(f64),
-    List(Vec<f64>), // for slash listing
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct SlotValue {
-    pub unit: Option<Ident>,
-    pub value: SlotValueKind,
-    pub span: Span,
-}
-
-/// Exercises can consist of multiple segments with different slot values
-/// separated by commas.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExerciseSegment {
-    pub values: Vec<SlotValue>,
-    pub span: Span,
-}
-
-/// Exercise is a part of an Activity entry that specifies a specific type and
-/// amount of work done.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Exercise {
-    pub name: Ident,
-    pub segments: Vec<ExerciseSegment>,
     pub span: Span,
 }
 
