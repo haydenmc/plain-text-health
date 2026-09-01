@@ -5,8 +5,12 @@ use logos::Logos;
 
 use crate::{
     directives::{
-        ActivityDecl, Directive::{self}, Entry, EntryKind, Exercise, ExerciseDecl, ExerciseSlotKind, Ident, Include, MeasureValue, Measurement, MetaItem, MetricAliasDecl, MetricDecl, RecordLine, RecordSegment, RecordValue, RecordValueKind, SlotValueKind, Span,
-    }, lexer::{
+        ActivityDecl, ActivityHeader,
+        Directive::{self},
+        Entry, ExerciseDecl, ExerciseSlotKind, Ident, Include, MetaItem, MetricAliasDecl,
+        MetricDecl, RecordLine, RecordSegment, RecordValue, RecordValueKind, Span,
+    },
+    lexer::{
         Token::{self, Newline},
         token_name,
     },
@@ -197,6 +201,14 @@ impl<'src> Parser<'src> {
         while self.eat_newline() {}
     }
 
+    fn current_start(&self) -> usize {
+        if self.at_eof() {
+            self.prev_end()
+        } else {
+            self.peek().expect("Not at EOF").1.start
+        }
+    }
+
     /// Skip to the start of the next top-level (unindented) line, or EOF.
     /// Helps to recover from errors and other bad state that might prevent us
     /// from continuing to parse successfully.
@@ -226,18 +238,12 @@ impl<'src> Parser<'src> {
         })
     }
 
-    fn parse_record_line_starting_with(&mut self, name: Ident) -> PResult<RecordLine> {
-        // first name has already been parsed
-        let record_values = vec![];
-        loop {
-
-        }
-    }
-
     /// Parses a single record value that can appear as part of an exercise or
     /// a measurement. Record values can have one or more numbers
     /// (slash-delimited) and an optional unit.
-    /// Ex. `12 lbs`, `12/12/14`, `3/4/5 mi`
+    /// Ex. `12 lbs`
+    /// Ex. `12/12/14`
+    /// Ex. `3/4/5 mi`
     fn parse_entry_record_value(&mut self) -> PResult<RecordValue> {
         let mut values = vec![];
         // There is at least one number value
@@ -248,6 +254,7 @@ impl<'src> Parser<'src> {
             if !self.check(Token::ForwardSlash) {
                 break;
             }
+            self.eat(Token::ForwardSlash);
         }
         // Optionally, there is a unit after the number(s)
         let unit = if self.check(Token::Word) {
@@ -271,107 +278,49 @@ impl<'src> Parser<'src> {
     }
 
     /// Parses an entry record segment. These belong to a RecordLine.
-    fn parse_entry_record_segment(&mut self) -> PResult<RecordSegment> {
-        let name: Option<Ident>;
-        
-
-        todo!()
-    }
-
-    /// Parses an entry record - which is anything that looks like
-    /// <name> <value> [/ more_values...] [unit] [, another_value...]
-    /// ex. Exercise: ``
-    fn parse_entry_record(&mut self) -> PResult<Measurement> {
-        let name = self.word()?;
-        let name_span = name.span.clone();
-
-        // The first value will either be followed by a unit, a slash (for
-        // compound values), a comma (part of a list of values) or end-of-line.
-        let value = self.number()?;
-        let Some((Ok(next_token), next_token_span)) = self.peek() else {
-            return Err(ParseError {
-                msg: "Unexpected tokens after measurement value".to_string(),
-                span: name_span.start..value.1.end,
-            });
+    fn parse_entry_record_segment(&mut self, name: Option<Ident>) -> PResult<RecordSegment> {
+        let start = match &name {
+            Some(n) => n.span.start,
+            None => self.current_start(),
         };
-        match next_token {
-            // unit
-            Token::Word => {
-                let unit = self.word()?;
-                let unit_span = unit.span.clone();
-                // MUST end in a comma or new line
-                if !self.check(Token::Comma) && !self.check(Token::Newline) {
-                    return Err(ParseError {
-                        msg: "Unexpected characters after measurement value".to_string(),
-                        span: name_span.start..unit_span.end,
-                    });
-                }
-                Ok(Measurement {
-                    metric: name,
-                    value: MeasureValue::Scalar(value.0),
-                    unit: Some(unit),
-                    span: name_span.start..unit_span.end,
-                })
-            }
-            // compound metric (multiple values delimited by `/`)
-            Token::ForwardSlash => {
-                let mut values = vec![value.0];
-                let mut last_value_span;
-                self.expect(Token::ForwardSlash)?;
-                loop {
-                    let next_value = self.number()?;
-                    values.push(next_value.0);
-                    last_value_span = next_value.1.clone();
-                    let Some((Ok(next_next_token), _)) = self.peek() else {
-                        return Err(ParseError {
-                            msg: "Unexpected tokens after compound measurement value".to_string(),
-                            span: name_span.start..last_value_span.end,
-                        });
-                    };
-                    match next_next_token {
-                        Token::ForwardSlash => {
-                            self.expect(Token::ForwardSlash)?;
-                            // loop continues to capture additional compound values
-                        }
-                        Token::Newline | Token::Comma => {
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-                Ok(Measurement {
-                    metric: name,
-                    value: MeasureValue::Compound(values),
-                    unit: None,
-                    span: name_span.start..last_value_span.end,
-                })
-            }
-            // comma/newline - end of this measurement
-            Token::Comma | Token::Newline => Ok(Measurement {
-                metric: name,
-                value: MeasureValue::Scalar(value.0),
-                unit: None,
-                span: name_span.start..value.1.end,
-            }),
-            tok => Err(ParseError {
-                msg: format!("Expected unit or slash. Found {}", token_name(tok)),
-                span: name_span.start..next_token_span.end,
-            }),
+        let mut values = vec![];
+        while self.check(Token::Number) {
+            values.push(self.parse_entry_record_value()?);
         }
+        if values.is_empty() {
+            return Err(ParseError {
+                msg: "Expected a value".into(),
+                span: self.current_start()..self.current_start(),
+            });
+        }
+        Ok(RecordSegment {
+            name,
+            values,
+            span: start..self.prev_end(),
+        })
     }
 
-    fn parse_measurement_header(&mut self, name: Ident) -> PResult<Vec<Measurement>> {
-        let mut measurements = vec![];
-        // Parse all of the comma-separated measurements
-        loop {
-            measurements.push(self.parse_measurement()?);
-            if self.check(Token::Comma) {
-                self.expect(Token::Comma)?;
+    fn parse_record_line_starting_with(&mut self, name: Ident) -> PResult<RecordLine> {
+        let start = name.span.start;
+        let mut segments = vec![self.parse_entry_record_segment(None)?];
+        while self.eat(Token::Comma) {
+            let segment_name = if self.check(Token::Word) {
+                Some(self.word()?)
             } else {
-                break;
-            }
+                None
+            };
+            segments.push(self.parse_entry_record_segment(segment_name)?);
         }
-        Ok(measurements)
+        Ok(RecordLine {
+            name,
+            segments,
+            span: start..self.prev_end(),
+        })
+    }
+
+    fn parse_record_line(&mut self) -> PResult<RecordLine> {
+        let name = self.word()?;
+        self.parse_record_line_starting_with(name)
     }
 
     fn parse_tags(&mut self) -> Vec<String> {
@@ -401,13 +350,10 @@ impl<'src> Parser<'src> {
         })
     }
 
-    fn parse_activity_body(&mut self, name: Ident) -> PResult<EntryKind> {
-        todo!()
-    }
-
     /// Parse an Entry directive. Always begins with a date and optionally a
     /// time, then the data recorded at that date/time (Metrics or Activity).
     fn parse_entry(&mut self) -> PResult<Directive> {
+        let start = self.current_start();
         let date_span = self.expect(Token::Date)?;
         let date = match parse_date(self.slice(&date_span)) {
             Ok(d) => d,
@@ -437,63 +383,92 @@ impl<'src> Parser<'src> {
         };
 
         let name = self.word()?;
-        let mut kind = if self.check(Token::Number) {
-            // A number indicates that this is a record
-            // a name followed by a value is a measurement entry
-            EntryKind::Measurements(self.parse_measurement_header(name)?)
+        let mut activity_header: Option<ActivityHeader> = None;
+        let mut records = vec![];
+        if self.check(Token::Number) {
+            // name followed by number means this is actually a record line
+            records.push(self.parse_record_line_starting_with(name)?);
         } else {
-            // activity
+            // name followed by non-number means this is likely an exercise
             let description = if self.check(Token::Str) {
                 Some(self.string()?.0)
             } else {
                 None
             };
-            EntryKind::Activity {
+            activity_header = Some(ActivityHeader {
+                span: name.span.start..self.prev_end(),
                 name,
                 description,
-                measurements: Vec::new(),
-                exercises: Vec::new(),
-            }
-        };
+            });
+        }
 
         let tags = self.parse_tags();
-        let mut metadata = Vec::new();
+        let mut metadata = vec![];
+
+        // Additional lines
         loop {
-            // Expect for there to be a newline or end-of-file after the header
             if self.at_eof() {
                 break;
             }
             if !self.at_newline() {
-                let sp = self.peek().unwrap().1;
                 return Err(ParseError {
-                    msg: format!("Unexpected `{}` after entry", self.slice(&sp)),
-                    span: sp,
+                    msg: "Unexpected token after entry".into(),
+                    span: self.current_start()..self.prev_end(),
                 });
             }
-            // If it's not indented, we're done. Otherwise, we have more to
-            // process.
             if !self.newline_is_indented() {
+                // a non-indented new-line means this entry is done
                 self.eat_newline();
                 break;
             }
-
             self.eat_newline();
             if self.at_newline() {
-                continue;
-            } // An indented newline with
-            // nothing in it.
+                continue; // skip the empty newline and try again
+            }
 
+            // Additional lines after the first entry line can only be one of
+            // two things:
+            // 1. a record (can be a measurement or an exercise) (ex.
+            //    `weight 165 lb` or `bench_press 185 lb 5/5/4`)
+            // 2. metadata (ex. `key: "Value"`)
             match (self.peek(), self.peek2()) {
                 (Some((Ok(Token::Word), _)), Some((Ok(Token::Colon), _))) => {
                     metadata.push(self.parse_metadata_item()?);
                 }
                 (Some((Ok(Token::Word), _)), _) => {
-                    let measurement = self.parse_measurement()?;
+                    records.push(self.parse_record_line()?);
                 }
+                (Some(_), _) => {
+                    // Found some other kind of token
+                    return Err(ParseError {
+                        msg: "Expected a measurement, exercise, or `key:` metadata".into(),
+                        span: self.current_start()..self.prev_end(),
+                    });
+                }
+                (None, _) => {
+                    // Found no tokens: end-of-file
+                    break;
+                }
+            }
+
+            // Any other remaining tokens before the eof/newline is an error
+            if !self.at_eof() && !self.at_newline() {
+                return Err(ParseError {
+                    msg: "Unexpected token after record line".into(),
+                    span: self.current_start()..self.prev_end(),
+                });
             }
         }
 
-        todo!()
+        Ok(Directive::Entry(Entry {
+            date,
+            time,
+            activity: activity_header,
+            records,
+            tags,
+            metadata,
+            span: start..self.prev_end(),
+        }))
     }
 
     /// Parse a pragma directive - currently just `!include "path/to/file"`
@@ -733,8 +708,10 @@ pub fn parse(src: &str) -> (Vec<Directive>, Vec<ParseError>) {
 
 #[cfg(test)]
 mod tests {
+    use log::Record;
+
     use crate::{
-        directives::{Directive, ExerciseSlotKind, SlotValueKind},
+        directives::{Directive, ExerciseSlotKind, RecordValueKind},
         lexer::{Token, token_name},
         parser::{ParseError, parse},
     };
@@ -955,5 +932,124 @@ mod tests {
             panic!("expected one parse error, got {errs:#?}")
         };
         assert!(error.msg.contains("Unknown directive"));
+    }
+
+    #[test]
+    fn basic_metric_entry() {
+        let dirs = parse_ok("2026-08-31 22:39 weight 139 lb");
+        let [Directive::Entry(e)] = &dirs[..] else {
+            panic!("expected one entry directive, got {dirs:#?}")
+        };
+        assert_eq!(e.date, (2026, 8, 31));
+        assert_eq!(e.time, Some((22, 39)));
+        assert_eq!(e.activity, None);
+        assert_eq!(e.records[0].name.text, "weight");
+        assert_eq!(
+            e.records[0].segments[0].values[0].value,
+            RecordValueKind::Single(139.0)
+        );
+        assert_eq!(
+            e.records[0].segments[0].values[0]
+                .unit
+                .clone()
+                .unwrap()
+                .text,
+            "lb"
+        );
+        assert_eq!(e.metadata.len(), 0);
+    }
+
+    #[test]
+    fn compound_metric_entry() {
+        let dirs = parse_ok("2026-08-31 01:23 bp 100/60");
+        let [Directive::Entry(e)] = &dirs[..] else {
+            panic!("expected one entry directive, got {dirs:#?}")
+        };
+        assert_eq!(e.date, (2026, 8, 31));
+        assert_eq!(e.time, Some((1, 23)));
+        assert_eq!(e.activity, None);
+        assert_eq!(e.records[0].name.text, "bp");
+        assert_eq!(
+            e.records[0].segments[0].values[0].value,
+            RecordValueKind::List(vec![100.0, 60.0])
+        );
+        assert_eq!(e.records[0].segments[0].values[0].unit, None);
+        assert_eq!(e.metadata.len(), 0);
+    }
+
+    #[test]
+    fn multiple_metric_same_line_entry() {
+        let dirs = parse_ok("2026-08-31 01:23 bp 100/60, weight 180 lb");
+        let [Directive::Entry(e)] = &dirs[..] else {
+            panic!("expected one entry directive, got {dirs:#?}")
+        };
+        assert_eq!(e.date, (2026, 8, 31));
+        assert_eq!(e.time, Some((1, 23)));
+        assert_eq!(e.activity, None);
+        assert_eq!(e.records[0].name.text, "bp");
+        assert_eq!(e.records[0].segments[0].name, None);
+        assert_eq!(
+            e.records[0].segments[0].values[0].value,
+            RecordValueKind::List(vec![100.0, 60.0])
+        );
+        assert_eq!(e.records[0].segments[0].values[0].unit, None);
+        assert_eq!(
+            e.records[0].segments[1].name.clone().unwrap().text,
+            "weight"
+        );
+        assert_eq!(
+            e.records[0].segments[1].values[0].value,
+            RecordValueKind::Single(180.0)
+        );
+        assert_eq!(
+            e.records[0].segments[1].values[0]
+                .unit
+                .clone()
+                .unwrap()
+                .text,
+            "lb"
+        );
+        assert_eq!(e.metadata.len(), 0);
+    }
+
+    #[test]
+    fn multiple_metric_multiple_line_entry() {
+        let dirs = parse_ok("2026-08-31 01:23 bp 100/60\n\tweight 180 lb\n\tbodyfat 18.2%");
+        let [Directive::Entry(e)] = &dirs[..] else {
+            panic!("expected one entry directive, got {dirs:#?}")
+        };
+        assert_eq!(e.date, (2026, 8, 31));
+        assert_eq!(e.time, Some((1, 23)));
+        assert_eq!(e.records[0].name.text, "bp");
+        assert_eq!(
+            e.records[0].segments[0].values[0].value,
+            RecordValueKind::List(vec![100.0, 60.0])
+        );
+        assert_eq!(e.records[1].name.text, "weight");
+        assert_eq!(
+            e.records[1].segments[0].values[0].value,
+            RecordValueKind::Single(180.0)
+        );
+        assert_eq!(
+            e.records[1].segments[0].values[0]
+                .unit
+                .clone()
+                .unwrap()
+                .text,
+            "lb"
+        );
+        assert_eq!(e.records[2].name.text, "bodyfat");
+        assert_eq!(
+            e.records[2].segments[0].values[0].value,
+            RecordValueKind::Single(18.2)
+        );
+        assert_eq!(
+            e.records[2].segments[0].values[0]
+                .unit
+                .clone()
+                .unwrap()
+                .text,
+            "%"
+        );
     }
 }
