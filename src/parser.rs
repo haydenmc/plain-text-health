@@ -341,8 +341,7 @@ impl<'src> Parser<'src> {
     fn parse_metadata_item(&mut self) -> PResult<MetaItem> {
         let key = self.word()?;
         self.expect(Token::Colon)?;
-        let value_span = self.expect(Token::Str)?;
-        let value = self.slice(&value_span);
+        let (value, value_span) = self.string()?;
         Ok(MetaItem {
             key: key.clone(),
             value: value.to_string(),
@@ -1050,6 +1049,103 @@ mod tests {
                 .unwrap()
                 .text,
             "%"
+        );
+    }
+
+    #[test]
+    fn basic_activity_entry() {
+        let dirs = parse_ok("2026-08-31 07:45 walk");
+        let [Directive::Entry(e)] = &dirs[..] else {
+            panic!("expected one entry directive, got {dirs:#?}")
+        };
+        assert_eq!(e.date, (2026, 8, 31));
+        assert_eq!(e.time, Some((7, 45)));
+        assert_eq!(e.activity.clone().unwrap().name.text, "walk");
+    }
+
+    #[test]
+    fn detailed_activity_entry() {
+        let dirs = parse_ok("2026-08-31 07:45 walk \"Morning walk\" #daily\n\tsteps 5000\n\tdistance 3 mi\n\tdocument: \"docs/maps/morning_walk.gpx\"");
+        let [Directive::Entry(e)] = &dirs[..] else {
+            panic!("expected one entry directive, got {dirs:#?}")
+        };
+        assert_eq!(e.date, (2026, 8, 31));
+        assert_eq!(e.time, Some((7, 45)));
+        assert_eq!(e.activity.clone().unwrap().name.text, "walk");
+        assert_eq!(e.activity.clone().unwrap().description.unwrap(), "Morning walk");
+        assert!(e.tags.contains(&"daily".to_string()));
+        assert_eq!(e.records[0].name.text, "steps");
+        assert_eq!(e.records[0].segments[0].values[0].value, RecordValueKind::Single(5000.0));
+        assert_eq!(e.records[0].segments[0].values[0].unit, None);
+        assert_eq!(e.records[1].name.text, "distance");
+        assert_eq!(e.records[1].segments[0].values[0].value, RecordValueKind::Single(3.0));
+        assert_eq!(e.records[1].segments[0].values[0].clone().unit.unwrap().text, "mi");
+        assert_eq!(e.metadata[0].key.text, "document");
+        assert_eq!(e.metadata[0].value, "docs/maps/morning_walk.gpx");
+    }
+
+    #[test]
+    fn detailed_activity_exercise_entry() {
+        let src = r#"2026-08-05 lift "Thursday Night Gym Session" #upperbody
+    bench_press 185 lb 5/5/4
+    dumbbell_curl 45 lb 6/6/5
+    dumbbell_shoulder_press 65 lb 7/6/6
+    avg_hr 148 bpm
+    document: "assets/2026/2026-08-05-my-huge-throbbing-muscles.jpg""#;
+        let dirs = parse_ok(src);
+        let [Directive::Entry(e)] = &dirs[..] else {
+            panic!("expected one entry directive, got {dirs:#?}")
+        };
+
+        // header
+        assert_eq!(e.date, (2026, 8, 5));
+        assert_eq!(e.time, None);
+        let act = e.activity.as_ref().expect("activity header");
+        assert_eq!(act.name.text, "lift");
+        assert_eq!(act.description.as_deref(), Some("Thursday Night Gym Session"));
+        assert_eq!(e.tags, ["upperbody"]);
+        assert_eq!(&src[e.span.clone()], src);   // entry spans the whole block
+
+        // records: four lines, each a single nameless segment
+        assert_eq!(e.records.len(), 4);
+        for rec in &e.records {
+            assert_eq!(rec.segments.len(), 1, "record {}", rec.name.text);
+            assert_eq!(rec.segments[0].name, None, "record {}", rec.name.text);
+        }
+
+        // helper: (value, unit) view of one RecordValue
+        let val = |r: usize, v: usize| {
+            let rv = &e.records[r].segments[0].values[v];
+            (rv.value.clone(), rv.unit.as_ref().map(|u| u.text.as_str()))
+        };
+
+        // bench_press 185 lb 5/5/4
+        assert_eq!(e.records[0].name.text, "bench_press");
+        assert_eq!(e.records[0].segments[0].values.len(), 2);
+        assert_eq!(val(0, 0), (RecordValueKind::Single(185.0), Some("lb")));
+        assert_eq!(val(0, 1), (RecordValueKind::List(vec![5.0, 5.0, 4.0]), None));
+
+        // dumbbell_curl 45 lb 6/6/5
+        assert_eq!(e.records[1].name.text, "dumbbell_curl");
+        assert_eq!(val(1, 0), (RecordValueKind::Single(45.0), Some("lb")));
+        assert_eq!(val(1, 1), (RecordValueKind::List(vec![6.0, 6.0, 5.0]), None));
+
+        // dumbbell_shoulder_press 65 lb 7/6/6
+        assert_eq!(e.records[2].name.text, "dumbbell_shoulder_press");
+        assert_eq!(val(2, 0), (RecordValueKind::Single(65.0), Some("lb")));
+        assert_eq!(val(2, 1), (RecordValueKind::List(vec![7.0, 6.0, 6.0]), None));
+
+        // avg_hr 148 bpm — same shape as an exercise; classification is the validator's
+        assert_eq!(e.records[3].name.text, "avg_hr");
+        assert_eq!(e.records[3].segments[0].values.len(), 1);
+        assert_eq!(val(3, 0), (RecordValueKind::Single(148.0), Some("bpm")));
+
+        // metadata: one item, quotes stripped
+        assert_eq!(e.metadata.len(), 1);
+        assert_eq!(e.metadata[0].key.text, "document");
+        assert_eq!(
+            e.metadata[0].value,
+            "assets/2026/2026-08-05-my-huge-throbbing-muscles.jpg"
         );
     }
 }
