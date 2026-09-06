@@ -341,8 +341,7 @@ impl<'src> Parser<'src> {
     fn parse_metadata_item(&mut self) -> PResult<MetaItem> {
         let key = self.word()?;
         self.expect(Token::Colon)?;
-        let value_span = self.expect(Token::Str)?;
-        let value = self.slice(&value_span);
+        let (value, value_span) = self.string()?;
         Ok(MetaItem {
             key: key.clone(),
             value: value.to_string(),
@@ -1050,6 +1049,62 @@ mod tests {
                 .unwrap()
                 .text,
             "%"
+        );
+    }
+
+    #[test]
+    fn basic_activity_entry() {
+        let dirs = parse_ok("2026-08-31 07:45 walk");
+        let [Directive::Entry(e)] = &dirs[..] else {
+            panic!("expected one entry directive, got {dirs:#?}")
+        };
+        assert_eq!(e.date, (2026, 8, 31));
+        assert_eq!(e.time, Some((7, 45)));
+        assert_eq!(e.activity.clone().unwrap().name.text, "walk");
+    }
+
+    #[test]
+    fn detailed_activity_entry() {
+        let dirs = parse_ok("2026-08-31 07:45 walk \"Morning walk\" #daily\n\tsteps 5000\n\tdistance 3 mi\n\tdocument: \"docs/maps/morning_walk.gpx\"");
+        let [Directive::Entry(e)] = &dirs[..] else {
+            panic!("expected one entry directive, got {dirs:#?}")
+        };
+        assert_eq!(e.date, (2026, 8, 31));
+        assert_eq!(e.time, Some((7, 45)));
+        assert_eq!(e.activity.clone().unwrap().name.text, "walk");
+        assert_eq!(e.activity.clone().unwrap().description.unwrap(), "Morning walk");
+        assert!(e.tags.contains(&"daily".to_string()));
+        assert_eq!(e.records[0].name.text, "steps");
+        assert_eq!(e.records[0].segments[0].values[0].value, RecordValueKind::Single(5000.0));
+        assert_eq!(e.records[0].segments[0].values[0].unit, None);
+        assert_eq!(e.records[1].name.text, "distance");
+        assert_eq!(e.records[1].segments[0].values[0].value, RecordValueKind::Single(3.0));
+        assert_eq!(e.records[1].segments[0].values[0].clone().unit.unwrap().text, "mi");
+        assert_eq!(e.metadata[0].key.text, "document");
+        assert_eq!(e.metadata[0].value, "docs/maps/morning_walk.gpx");
+    }
+
+    #[test]
+    fn detailed_activity_exercise_entry() {
+        let dirs = parse_ok(r#"2026-08-05 lift "Thursday Night Gym Session" #upperbody
+  bench_press 185 lb 5/5/4
+  dumbbell_curl 45 lb 6/6/5
+  dumbbell_shoulder_press 65 lb 7/6/6
+  avg_hr 148 bpm
+  document: "assets/2026/2026-08-05-my-huge-throbbing-muscles.jpg""#);
+        let [Directive::Entry(e)] = &dirs[..] else {
+            panic!("expected one entry directive, got {dirs:#?}")
+        };
+        assert_eq!(e.date, (2026, 8, 5));
+        assert_eq!(e.time, None);
+        assert_eq!(e.activity.clone().unwrap().name.text, "lift");
+        assert_eq!(e.activity.clone().unwrap().description.unwrap(), "Thursday Night Gym Session");
+        assert!(e.tags.contains(&"upperbody".to_string()));
+        assert_eq!(e.records[0].name.text, "bench_press");
+        assert_eq!(e.records[0].segments[0].values[0].unit.clone().unwrap().text, "lb");
+        assert_eq!(
+            e.records[0].segments[0].values[0].value,
+            RecordValueKind::List(vec![100.0, 60.0])
         );
     }
 }
