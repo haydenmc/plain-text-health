@@ -245,6 +245,10 @@ Slash-listing may be used on up to one slot to repeat that exercise with the
 list of slash-delimited values. The other slot values are copied to each
 repeated record. Ex. `lap_400m 92/94/91 sec`
 
+Comma-separated lists and slash-listing can be also be combined to provide
+convenience for repeated values, but flexibility to add distinct values. Ex.
+`dumbbell_press 6/5/4 25 lb, 3 20 lb`
+
 Metrics and metadata are written in the same syntax specified in "Metrics Entry"
 above.
 

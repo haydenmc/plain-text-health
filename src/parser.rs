@@ -1090,6 +1090,7 @@ mod tests {
     bench_press 185 lb 5/5/4
     dumbbell_curl 45 lb 6/6/5
     dumbbell_shoulder_press 65 lb 7/6/6
+    dumbbell_press 6/5/4 25 lb, 3 20 lb
     avg_hr 148 bpm
     document: "assets/2026/2026-08-05-my-huge-throbbing-muscles.jpg""#;
         let dirs = parse_ok(src);
@@ -1104,41 +1105,58 @@ mod tests {
         assert_eq!(act.name.text, "lift");
         assert_eq!(act.description.as_deref(), Some("Thursday Night Gym Session"));
         assert_eq!(e.tags, ["upperbody"]);
-        assert_eq!(&src[e.span.clone()], src);   // entry spans the whole block
+        assert_eq!(&src[e.span.clone()], src);
 
-        // records: four lines, each a single nameless segment
-        assert_eq!(e.records.len(), 4);
+        // records: five lines; the first segment of every line is nameless
+        assert_eq!(e.records.len(), 5);
         for rec in &e.records {
-            assert_eq!(rec.segments.len(), 1, "record {}", rec.name.text);
             assert_eq!(rec.segments[0].name, None, "record {}", rec.name.text);
         }
 
-        // helper: (value, unit) view of one RecordValue
-        let val = |r: usize, v: usize| {
-            let rv = &e.records[r].segments[0].values[v];
+        // helper: (value, unit) view of one RecordValue, by record/segment/value index
+        let val = |r: usize, s: usize, v: usize| {
+            let rv = &e.records[r].segments[s].values[v];
             (rv.value.clone(), rv.unit.as_ref().map(|u| u.text.as_str()))
         };
 
         // bench_press 185 lb 5/5/4
         assert_eq!(e.records[0].name.text, "bench_press");
+        assert_eq!(e.records[0].segments.len(), 1);
         assert_eq!(e.records[0].segments[0].values.len(), 2);
-        assert_eq!(val(0, 0), (RecordValueKind::Single(185.0), Some("lb")));
-        assert_eq!(val(0, 1), (RecordValueKind::List(vec![5.0, 5.0, 4.0]), None));
+        assert_eq!(val(0, 0, 0), (RecordValueKind::Single(185.0), Some("lb")));
+        assert_eq!(val(0, 0, 1), (RecordValueKind::List(vec![5.0, 5.0, 4.0]), None));
 
         // dumbbell_curl 45 lb 6/6/5
         assert_eq!(e.records[1].name.text, "dumbbell_curl");
-        assert_eq!(val(1, 0), (RecordValueKind::Single(45.0), Some("lb")));
-        assert_eq!(val(1, 1), (RecordValueKind::List(vec![6.0, 6.0, 5.0]), None));
+        assert_eq!(e.records[1].segments.len(), 1);
+        assert_eq!(val(1, 0, 0), (RecordValueKind::Single(45.0), Some("lb")));
+        assert_eq!(val(1, 0, 1), (RecordValueKind::List(vec![6.0, 6.0, 5.0]), None));
 
         // dumbbell_shoulder_press 65 lb 7/6/6
         assert_eq!(e.records[2].name.text, "dumbbell_shoulder_press");
-        assert_eq!(val(2, 0), (RecordValueKind::Single(65.0), Some("lb")));
-        assert_eq!(val(2, 1), (RecordValueKind::List(vec![7.0, 6.0, 6.0]), None));
+        assert_eq!(e.records[2].segments.len(), 1);
+        assert_eq!(val(2, 0, 0), (RecordValueKind::Single(65.0), Some("lb")));
+        assert_eq!(val(2, 0, 1), (RecordValueKind::List(vec![7.0, 6.0, 6.0]), None));
+
+        // dumbbell_press 6/5/4 25 lb, 3 20 lb  — two segments, second is a nameless continuation
+        assert_eq!(e.records[3].name.text, "dumbbell_press");
+        assert_eq!(e.records[3].segments.len(), 2);
+        assert_eq!(e.records[3].segments[0].values.len(), 2);
+        assert_eq!(val(3, 0, 0), (RecordValueKind::List(vec![6.0, 5.0, 4.0]), None));
+        assert_eq!(val(3, 0, 1), (RecordValueKind::Single(25.0), Some("lb")));
+        assert_eq!(e.records[3].segments[1].name, None);
+        assert_eq!(e.records[3].segments[1].values.len(), 2);
+        assert_eq!(val(3, 1, 0), (RecordValueKind::Single(3.0), None));
+        assert_eq!(val(3, 1, 1), (RecordValueKind::Single(20.0), Some("lb")));
+        // segment spans cover exactly their source text
+        assert_eq!(&src[e.records[3].segments[0].span.clone()], "6/5/4 25 lb");
+        assert_eq!(&src[e.records[3].segments[1].span.clone()], "3 20 lb");
 
         // avg_hr 148 bpm — same shape as an exercise; classification is the validator's
-        assert_eq!(e.records[3].name.text, "avg_hr");
-        assert_eq!(e.records[3].segments[0].values.len(), 1);
-        assert_eq!(val(3, 0), (RecordValueKind::Single(148.0), Some("bpm")));
+        assert_eq!(e.records[4].name.text, "avg_hr");
+        assert_eq!(e.records[4].segments.len(), 1);
+        assert_eq!(e.records[4].segments[0].values.len(), 1);
+        assert_eq!(val(4, 0, 0), (RecordValueKind::Single(148.0), Some("bpm")));
 
         // metadata: one item, quotes stripped
         assert_eq!(e.metadata.len(), 1);
