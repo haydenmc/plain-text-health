@@ -263,7 +263,7 @@ Example:
   document: "assets/2026/2026-08-05-my-huge-throbbing-muscles.jpg"
 ```
 
-## Rough Architecture
+# Rough Architecture
 
 plain-text-health reads in the complete contents of the entrypoint `.fitlog`
 file, as well as any files referenced by include statements. It parses all of
@@ -278,7 +278,18 @@ Tools can then be built on top of this data foundation to provide dashboards,
 insights, and import tools to pull health data from other applications and
 services.
 
-## Dev Environment
+The pipeline is broken into a series of stages:
+
+Lex → Parse → Assemble → Validate → Build
+
+- Lex: Breaks source text up into a series of tokens
+- Parse: Transforms the token sequences into structured directives
+- Assemble: Follows every `!include` directive and merges all directives into a
+  single list
+- Validate: Builds a symbol table, resolves records against declarations
+- Build: Maps records to in-memory data model and make available for querying
+
+# Dev Environment
 
 This project leverages [dev containers](https://containers.dev). You can use a
 tool like [DevPod](https://devpod.sh) to spin up a container that has all the

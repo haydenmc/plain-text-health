@@ -1,6 +1,7 @@
 mod directives;
 mod lexer;
 mod parser;
+mod assembler;
 
 use std::{fs, path::PathBuf, process::{ExitCode, ExitStatus, exit}};
 
