@@ -51,7 +51,7 @@ pub struct MetricAliasDecl {
 }
 
 /// Types of metrics that can be recorded within each exercise.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ExerciseSlotKind {
     Load,
     Reps,
