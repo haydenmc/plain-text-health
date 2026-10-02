@@ -1,3 +1,4 @@
+use core::fmt;
 use std::{
     collections::{HashMap, HashSet},
     fs, io,
@@ -51,6 +52,15 @@ pub struct Location {
 pub enum Severity {
     Error,
     Warning,
+}
+
+impl fmt::Display for Severity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Severity::Error => "error",
+            Severity::Warning => "warning",
+        })
+    }
 }
 
 /// Represents problems that can be encountered during the parsing/assembling
