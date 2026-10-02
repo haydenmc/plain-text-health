@@ -557,7 +557,7 @@ impl<'src> Parser<'src> {
             let slot_kind = match slot_token.text.as_str() {
                 "load" => ExerciseSlotKind::Load,
                 "reps" => ExerciseSlotKind::Reps,
-                "duration" => ExerciseSlotKind::Distance,
+                "duration" => ExerciseSlotKind::Duration,
                 "distance" => ExerciseSlotKind::Distance,
                 other => {
                     return Err(ParseError {

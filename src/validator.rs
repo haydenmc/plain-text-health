@@ -56,7 +56,7 @@ pub struct Observation {
 pub struct Set {
     pub event_id: EventId,
     pub exercise: String,
-    pub set_number: u32, // 1-based, the order of the set in the exercise
+    pub set_number: u32, // 1-based, the order of the set in the event, across all exercises
     pub load: Option<(f64, String)>,
     pub reps: Option<f64>,
     pub duration: Option<(f64, String)>,
@@ -76,12 +76,19 @@ fn error(src: SourceId, span: Span, message: String) -> Diagnostic {
 }
 
 pub fn validate(asm: Assembled) -> Validated {
-    let mut diagnostics: Vec<Diagnostic> = Vec::new();
+    let mut diagnostics: Vec<Diagnostic> = asm.diagnostics;
     let symbols = build_symbol_table(&asm.directives, &mut diagnostics);
     check_aliases(&symbols, &asm.directives, &mut diagnostics);
     check_exercises(&asm.directives, &mut diagnostics);
     let entries = EntryValidator::new(&symbols).run(&asm.directives);
-    todo!()
+    diagnostics.extend(entries.diagnostics);
+    Validated {
+        sources: asm.sources,
+        events: entries.events,
+        observations: entries.observations,
+        sets: entries.sets,
+        diagnostics,
+    }
 }
 
 /// Builds a global symbol table and flags errors if there are any duplicates.
@@ -102,7 +109,7 @@ fn build_symbol_table(
         } {
             if symbols.contains_key(&symbol_ident.text) {
                 diagnostics.push(Diagnostic {
-                    severity: crate::assembler::Severity::Error,
+                    severity: Severity::Error,
                     msg: format!("duplicate symbol `{}`", symbol_ident.text),
                     location: Location {
                         source: *s,
@@ -169,6 +176,8 @@ struct EntryOutput {
     diagnostics: Vec<Diagnostic>,
 }
 
+/// A utility struct used to process directives into events with observations
+/// and sets.
 struct EntryValidator<'s> {
     symbols: &'s SymbolTable,
     events: Vec<Event>,
@@ -188,6 +197,8 @@ impl<'s> EntryValidator<'s> {
         }
     }
 
+    /// Processes the given directives into events, observations, and sets.
+    /// After this is called, the EntryValidator object is no longer valid.
     fn run(mut self, directives: &[(SourceId, Directive)]) -> EntryOutput {
         for (src, d) in directives {
             if let Directive::Entry(e) = d {
@@ -202,6 +213,8 @@ impl<'s> EntryValidator<'s> {
         }
     }
 
+    /// Processes the given Entry directive into an Event, along with any
+    /// attached observations and sets.
     fn entry(&mut self, src: SourceId, e: &Entry) {
         let event_id = EventId(self.events.len() as u32);
         self.events.push(Event {
@@ -222,11 +235,29 @@ impl<'s> EntryValidator<'s> {
             },
         });
 
-        let symbols = self.symbols;
+        // If this is an activity, confirm it has been declared
+        if let Some(a) = &e.activity {
+            if !matches!(
+                self.symbols.get(&a.name.text),
+                Some((_, Directive::Activity(_)))
+            ) {
+                self.diagnostics.push(error(
+                    src,
+                    a.name.span.clone(),
+                    format!("`{}` is not a declared activity", a.name.text),
+                ));
+            }
+        }
+
+        // Process each record line:
+        // - group the segments by name (unnamed segments belong to the last
+        //   name)
+        // - look up the name and process the group based on the type (metric,
+        //   metric alias, exercise)
         let mut next_set_num: u32 = 0;
         for line in &e.records {
             for g in group_segments(line) {
-                match symbols.get(&g.name.text) {
+                match self.symbols.get(&g.name.text) {
                     Some((_, Directive::Metric(m))) => {
                         match metric_observation(src, event_id, m, &g) {
                             Ok(o) => self.observations.push(o),
@@ -234,15 +265,26 @@ impl<'s> EntryValidator<'s> {
                         }
                     }
                     Some((_, Directive::MetricAlias(m))) => {
-                        match metric_alias_observation(src, event_id, m, symbols, &g) {
+                        match metric_alias_observation(src, event_id, m, self.symbols, &g) {
                             Ok(o) => self.observations.extend(o),
                             Err(d) => self.diagnostics.push(d),
                         }
                     }
-                    Some((_, Directive::Exercise(e))) => {
-                        match metric_exercise_set(src, event_id, e, &g, &mut next_set_num) {
-                            Ok(s) => self.sets.extend(s),
-                            Err(d) => self.diagnostics.push(d),
+                    Some((_, Directive::Exercise(x))) => {
+                        if e.activity.is_none() {
+                            self.diagnostics.push(error(
+                                src,
+                                g.name.span.clone(),
+                                format!(
+                                    "exercise `{}` must be recorded within an activity",
+                                    x.name.text
+                                ),
+                            ));
+                        } else {
+                            match metric_exercise_set(src, event_id, x, &g, &mut next_set_num) {
+                                Ok(s) => self.sets.extend(s),
+                                Err(d) => self.diagnostics.push(d),
+                            }
                         }
                     }
                     Some(_) => {
@@ -288,6 +330,7 @@ fn group_segments(line: &RecordLine) -> Vec<SegmentGroup> {
     groups
 }
 
+/// Processes the given metric segment group into an observation instance.
 fn metric_observation(
     src: SourceId,
     event: EventId,
@@ -326,7 +369,7 @@ fn metric_observation(
                 u.span.clone(),
                 format!(
                     "`{}` stated with `{}` units, expected `{}`",
-                    m.name.text, m.unit.text, u.text
+                    m.name.text, u.text, m.unit.text
                 ),
             ));
         }
@@ -343,6 +386,7 @@ fn metric_observation(
     })
 }
 
+/// Processes the given metric alias segment into a set of observation instances
 fn metric_alias_observation(
     src: SourceId,
     event: EventId,
@@ -412,7 +456,7 @@ fn metric_alias_observation(
                 if u.text != m.unit.text {
                     return Err(error(
                         src,
-                        value.span.clone(),
+                        u.span.clone(),
                         format!(
                             "`{}` stated with `{}` units, expected `{}`",
                             name.text, u.text, m.unit.text
@@ -442,13 +486,13 @@ fn exercise_slot_for(src: SourceId, v: &RecordValue) -> Result<ExerciseSlotKind,
     };
     match u.text.as_str() {
         "lb" | "kg" => Ok(ExerciseSlotKind::Load),
-        "sec" | "min" => Ok(ExerciseSlotKind::Duration),
+        "sec" | "min" | "hr" => Ok(ExerciseSlotKind::Duration),
         "m" | "km" | "mi" | "ft" | "yd" => Ok(ExerciseSlotKind::Distance),
         other => Err(error(
             src,
             u.span.clone(),
             format!(
-                "unknown unit `{other}` for exercise (expected lb, kg, sec, min, m, km, mi, ft, or yd)"
+                "unknown unit `{other}` for exercise (expected lb, kg, sec, min, hr, m, km, mi, ft, or yd)"
             ),
         )),
     }
@@ -484,6 +528,7 @@ fn exercise_slot_name(s: &ExerciseSlotKind) -> &'static str {
     }
 }
 
+/// Processes the given exercise segment group into a set of Set instances
 fn metric_exercise_set(
     src: SourceId,
     event: EventId,
@@ -581,4 +626,228 @@ fn metric_exercise_set(
 
     *next_set += out.len() as u32;
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::assembler::{assemble_with, MapSourceTextProvider};
+    use std::path::Path;
+
+    const DECLS: &str = "\
+metric weight lb
+metric bodyfat %
+metric bp_sys mmHg
+metric bp_dia mmHg
+metric bp = bp_sys / bp_dia
+activity lift
+activity hike
+exercise bench_press load reps
+exercise dumbbell_press load reps
+exercise dumbbell_curl load reps
+exercise plank duration
+exercise pullups reps
+";
+
+    fn run(body: &str) -> Validated {
+        let main = format!("!include \"decls.fitlog\"\n{body}\n");
+        let provider = MapSourceTextProvider::new(&[("main.fitlog", &main), ("decls.fitlog", DECLS)]);
+        let asm = assemble_with(Path::new("main.fitlog"), &provider).expect("entrypoint readable");
+        validate(asm)
+    }
+
+    fn errors(v: &Validated) -> Vec<&Diagnostic> {
+        v.diagnostics
+            .iter()
+            .filter(|d| matches!(d.severity, Severity::Error))
+            .collect()
+    }
+
+    fn assert_clean(v: &Validated) {
+        let errs = errors(v);
+        assert!(errs.is_empty(), "unexpected errors: {errs:#?}");
+    }
+
+    /// Asserts exactly one error whose message contains `needle`, and returns
+    /// the source text the error points at.
+    fn single_error<'v>(v: &'v Validated, needle: &str) -> &'v str {
+        let errs = errors(v);
+        let [d] = &errs[..] else {
+            panic!("expected exactly one error, got {errs:#?}")
+        };
+        assert!(d.msg.contains(needle), "{:?} does not mention {:?}", d.msg, needle);
+        &v.sources.get(d.location.source).text[d.location.span.clone()]
+    }
+
+    // ---- metrics ----
+
+    #[test]
+    fn metric_with_stated_unit() {
+        let v = run("2026-08-05 weight 178.4 lb");
+        assert_clean(&v);
+        let [o] = &v.observations[..] else { panic!("expected one observation") };
+        assert_eq!((o.metric.as_str(), o.value, o.unit.as_str()), ("weight", 178.4, "lb"));
+        assert_eq!(v.events.len(), 1);
+        assert_eq!(v.events[0].activity, None);
+    }
+
+    #[test]
+    fn metric_unit_inferred_from_declaration() {
+        let v = run("2026-08-05 weight 178.4");
+        assert_clean(&v);
+        assert_eq!(v.observations[0].unit, "lb");
+    }
+
+    #[test]
+    fn metric_unit_mismatch() {
+        let v = run("2026-08-05 weight 80 kg");
+        assert_eq!(single_error(&v, "stated with `kg` units, expected `lb`"), "kg");
+        assert!(v.observations.is_empty());
+    }
+
+    #[test]
+    fn named_continuations_are_separate_measurements() {
+        let v = run("2026-08-05 weight 178.4 lb, bodyfat 18.2 %, weight 180.1");
+        assert_clean(&v);
+        let names: Vec<_> = v.observations.iter().map(|o| o.metric.as_str()).collect();
+        assert_eq!(names, ["weight", "bodyfat", "weight"]);
+    }
+
+    #[test]
+    fn nameless_continuation_after_metric_is_an_error() {
+        let v = run("2026-08-05 weight 178.4 lb, 180.1 lb");
+        assert_eq!(single_error(&v, "must be named"), "180.1 lb");
+        assert!(v.observations.is_empty());
+    }
+
+    #[test]
+    fn unknown_metric() {
+        let v = run("2026-08-05 wieght 178.4");
+        assert_eq!(single_error(&v, "wieght"), "wieght");
+    }
+
+    // ---- aliases ----
+
+    #[test]
+    fn alias_expands_to_components() {
+        let v = run("2026-08-05 bp 118/76");
+        assert_clean(&v);
+        let got: Vec<_> = v
+            .observations
+            .iter()
+            .map(|o| (o.metric.as_str(), o.value, o.unit.as_str()))
+            .collect();
+        assert_eq!(got, [("bp_sys", 118.0, "mmHg"), ("bp_dia", 76.0, "mmHg")]);
+    }
+
+    #[test]
+    fn alias_wrong_num_values() {
+        let v = run("2026-08-05 bp 118/76/50");
+        single_error(&v, "expects 2 values, found 3");
+        assert!(v.observations.is_empty());
+    }
+
+    #[test]
+    fn alias_with_single_value() {
+        let v = run("2026-08-05 bp 118");
+        single_error(&v, "Separate the values with `/`");
+    }
+
+    // ---- activities ----
+
+    #[test]
+    fn undeclared_activity() {
+        let v = run("2026-08-05 hikee \"Cougar Mountain\"");
+        assert_eq!(single_error(&v, "not a declared activity"), "hikee");
+    }
+
+    #[test]
+    fn exercise_outside_activity() {
+        let v = run("2026-08-05 bench_press 185 lb 5");
+        single_error(&v, "within an activity");
+        assert!(v.sets.is_empty());
+    }
+
+    // ---- exercises ----
+
+    #[test]
+    fn drop_set_expands_to_four_sets() {
+        let v = run(r#"2026-08-05 lift
+  dumbbell_press 6/5/4 25 lb, 3 20 lb"#);
+        assert_clean(&v);
+        let got: Vec<_> = v
+            .sets
+            .iter()
+            .map(|s| (s.set_number, s.load.as_ref().map(|(n, u)| (*n, u.as_str())), s.reps))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                (1, Some((25.0, "lb")), Some(6.0)),
+                (2, Some((25.0, "lb")), Some(5.0)),
+                (3, Some((25.0, "lb")), Some(4.0)),
+                (4, Some((20.0, "lb")), Some(3.0)),
+            ]
+        );
+    }
+
+    #[test]
+    fn set_numbers_follow_written_order_across_exercises() {
+        let v = run(r#"2026-08-05 lift
+  dumbbell_curl 30 lb 10
+  bench_press 185 lb 5
+  dumbbell_curl 30 lb 8"#);
+        assert_clean(&v);
+        let got: Vec<_> = v.sets.iter().map(|s| (s.set_number, s.exercise.as_str())).collect();
+        assert_eq!(got, [(1, "dumbbell_curl"), (2, "bench_press"), (3, "dumbbell_curl")]);
+    }
+
+    #[test]
+    fn failed_group_does_not_consume_set_numbers() {
+        let v = run(r#"2026-08-05 lift
+  bench_press 185 lb 5, 175 lb
+  dumbbell_curl 30 lb 10"#);
+        single_error(&v, "missing `reps`");
+        let [s] = &v.sets[..] else { panic!("expected one set") };
+        assert_eq!((s.exercise.as_str(), s.set_number), ("dumbbell_curl", 1));
+    }
+
+    #[test]
+    fn missing_slot() {
+        let v = run("2026-08-05 lift\n  bench_press 185 lb");
+        single_error(&v, "missing `reps`");
+    }
+
+    #[test]
+    fn undeclared_slot() {
+        let v = run("2026-08-05 lift\n  pullups 25 lb 8");
+        assert_eq!(single_error(&v, "`load` slot"), "25 lb");
+    }
+
+    #[test]
+    fn only_one_slash_list_per_group() {
+        let v = run("2026-08-05 lift\n  bench_press 185/175 lb 5/5");
+        assert_eq!(single_error(&v, "only one value"), "5/5");
+    }
+
+    #[test]
+    fn all_duration_units_accepted() {
+        let v = run("2026-08-05 lift\n  plank 90 sec\n  plank 2 min\n  plank 1 hr");
+        assert_clean(&v);
+        assert_eq!(v.sets.len(), 3);
+    }
+
+    // ---- declarations and plumbing ----
+
+    #[test]
+    fn duplicate_declaration() {
+        let v = run("metric weight kg");
+        single_error(&v, "duplicate symbol `weight`");
+    }
+
+    #[test]
+    fn parse_errors_are_carried_through() {
+        let v = run("metrc steps steps");
+        single_error(&v, "metrc");
+    }
 }

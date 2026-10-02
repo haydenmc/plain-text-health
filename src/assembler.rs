@@ -93,6 +93,30 @@ impl SourceTextProvider for DiskSourceTextProvider {
     }
 }
 
+/// An implementation of SourceTextProvider that reads files from a hashmap
+/// keyed by file path. Useful for test scenarios where we don't want to hit the
+/// actual disk.
+pub(crate) struct MapSourceTextProvider(HashMap<PathBuf, String>);
+
+impl MapSourceTextProvider {
+    pub(crate) fn new(files: &[(&str, & str)]) -> Self {
+        Self(files.iter().map(|(p, t)| (PathBuf::from(p), t.to_string())).collect())
+    }
+}
+
+impl SourceTextProvider for MapSourceTextProvider {
+    fn read(&self, path: &Path) -> io::Result<String> {
+        self.0
+            .get(path)
+            .cloned()
+            .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
+    }
+
+    fn path_to_key(&self, path: &Path) -> io::Result<PathBuf> {
+        Ok(path.to_path_buf())
+    }
+}
+
 /// Parses and assembles a series of fitlog files starting with the given path.
 pub fn assemble(entry: &Path) -> io::Result<Assembled> {
     assemble_with(entry, &DiskSourceTextProvider)
@@ -178,30 +202,6 @@ fn walk(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// An implementation of SourceTextProvider that reads files from a hashmap
-    /// keyed by file path. Useful for test scenarios where we don't want to hit the
-    /// actual disk.
-    pub struct MapSourceTextProvider(HashMap<PathBuf, &'static str>);
-
-    impl MapSourceTextProvider {
-        fn new(files: &[(&str, &'static str)]) -> Self {
-            Self(files.iter().map(|(p, t)| (PathBuf::from(p), *t)).collect())
-        }
-    }
-
-    impl SourceTextProvider for MapSourceTextProvider {
-        fn read(&self, path: &Path) -> io::Result<String> {
-            self.0
-                .get(path)
-                .map(|s| s.to_string())
-                .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
-        }
-
-        fn path_to_key(&self, path: &Path) -> io::Result<PathBuf> {
-            Ok(path.to_path_buf())
-        }
-    }
 
     /// Assemble with the first file as the entrypoint.
     fn run(files: &[(&str, &'static str)]) -> Assembled {
