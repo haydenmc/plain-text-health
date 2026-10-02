@@ -4,18 +4,12 @@ mod lexer;
 mod parser;
 mod validator;
 
-use std::{
-    fs,
-    path::PathBuf,
-    process::{ExitCode, ExitStatus, exit},
-};
+use std::{path::{Path, PathBuf}, process::ExitCode};
 
-use clap::{Parser, Subcommand, error};
+use clap::{Parser, Subcommand};
 
 use crate::{
     assembler::{Diagnostic, Severity, SourceMap},
-    lexer::Token::Comma,
-    parser::parse,
     validator::validate,
 };
 
@@ -59,7 +53,7 @@ fn render_diagnostics(source_map: &SourceMap, diagnostics: &Vec<Diagnostic>) {
     }
 }
 
-fn check(file: &PathBuf) -> ExitCode {
+fn check(file: &Path) -> ExitCode {
     let assembled = match assembler::assemble(file) {
         Ok(a) => a,
         Err(e) => {

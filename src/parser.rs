@@ -11,7 +11,7 @@ use crate::{
         MetricDecl, RecordLine, RecordSegment, RecordValue, RecordValueKind, Span,
     },
     lexer::{
-        Token::{self, Newline},
+        Token::{self},
         token_name,
     },
 };
@@ -142,7 +142,7 @@ impl<'src> Parser<'src> {
         let span = self.expect(Token::Word)?;
         Ok(Ident {
             text: self.slice(&span).to_string(),
-            span: span,
+            span,
         })
     }
 
@@ -266,13 +266,12 @@ impl<'src> Parser<'src> {
             value: if values.len() == 1 {
                 RecordValueKind::Single(values[0].0)
             } else {
-                RecordValueKind::List(values.iter().map(|(v, _)| v.clone()).collect())
+                RecordValueKind::List(values.iter().map(|(v, _)| *v).collect())
             },
             unit: unit.clone(),
-            span: if unit.is_some() {
-                values[0].1.start..unit.unwrap().span.end
-            } else {
-                values.first().unwrap().1.start..values.last().unwrap().1.end
+            span: match unit {
+                Some(u) => values[0].1.start..u.span.end,
+                _ => values.first().unwrap().1.start..values.last().unwrap().1.end,
             },
         })
     }
@@ -489,7 +488,7 @@ impl<'src> Parser<'src> {
 
         let (path, _span) = self.string()?;
         Ok(Directive::Include(Include {
-            path: path,
+            path,
             span: bang.start..self.prev_end(),
         }))
     }
@@ -572,7 +571,7 @@ impl<'src> Parser<'src> {
             slots.push(slot_kind);
         }
 
-        if slots.len() <= 0 {
+        if slots.is_empty() {
             return Err(ParseError {
                 msg: format!(
                     "Expected at least one slot declaration for exercise `{}`.",
@@ -648,7 +647,7 @@ fn days_in_month(y: u16, m: u8) -> u8 {
 }
 
 fn is_leap_year(y: u16) -> bool {
-    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+    (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400)
 }
 
 fn parse_time(time_str: &str) -> Option<(u8, u8)> {
@@ -676,7 +675,7 @@ fn parse_date(date_string: &str) -> Result<(u16, u8, u8), String> {
     let m: u8 = m.parse().expect("Two month digits fit in u8");
     let d: u8 = d.parse().expect("Two day digits fit in u8");
 
-    if m < 1 || m > 12 {
+    if !(1..=12).contains(&m) {
         return Err(format!("`{}` is not a valid month (expected 1-12)", m));
     }
 
@@ -1065,21 +1064,39 @@ mod tests {
 
     #[test]
     fn detailed_activity_entry() {
-        let dirs = parse_ok("2026-08-31 07:45 walk \"Morning walk\" #daily\n\tsteps 5000\n\tdistance 3 mi\n\tdocument: \"docs/maps/morning_walk.gpx\"");
+        let dirs = parse_ok(
+            "2026-08-31 07:45 walk \"Morning walk\" #daily\n\tsteps 5000\n\tdistance 3 mi\n\tdocument: \"docs/maps/morning_walk.gpx\"",
+        );
         let [Directive::Entry(e)] = &dirs[..] else {
             panic!("expected one entry directive, got {dirs:#?}")
         };
         assert_eq!(e.date, (2026, 8, 31));
         assert_eq!(e.time, Some((7, 45)));
         assert_eq!(e.activity.clone().unwrap().name.text, "walk");
-        assert_eq!(e.activity.clone().unwrap().description.unwrap(), "Morning walk");
+        assert_eq!(
+            e.activity.clone().unwrap().description.unwrap(),
+            "Morning walk"
+        );
         assert!(e.tags.contains(&"daily".to_string()));
         assert_eq!(e.records[0].name.text, "steps");
-        assert_eq!(e.records[0].segments[0].values[0].value, RecordValueKind::Single(5000.0));
+        assert_eq!(
+            e.records[0].segments[0].values[0].value,
+            RecordValueKind::Single(5000.0)
+        );
         assert_eq!(e.records[0].segments[0].values[0].unit, None);
         assert_eq!(e.records[1].name.text, "distance");
-        assert_eq!(e.records[1].segments[0].values[0].value, RecordValueKind::Single(3.0));
-        assert_eq!(e.records[1].segments[0].values[0].clone().unit.unwrap().text, "mi");
+        assert_eq!(
+            e.records[1].segments[0].values[0].value,
+            RecordValueKind::Single(3.0)
+        );
+        assert_eq!(
+            e.records[1].segments[0].values[0]
+                .clone()
+                .unit
+                .unwrap()
+                .text,
+            "mi"
+        );
         assert_eq!(e.metadata[0].key.text, "document");
         assert_eq!(e.metadata[0].value, "docs/maps/morning_walk.gpx");
     }
@@ -1103,7 +1120,10 @@ mod tests {
         assert_eq!(e.time, None);
         let act = e.activity.as_ref().expect("activity header");
         assert_eq!(act.name.text, "lift");
-        assert_eq!(act.description.as_deref(), Some("Thursday Night Gym Session"));
+        assert_eq!(
+            act.description.as_deref(),
+            Some("Thursday Night Gym Session")
+        );
         assert_eq!(e.tags, ["upperbody"]);
         assert_eq!(&src[e.span.clone()], src);
 
@@ -1124,25 +1144,37 @@ mod tests {
         assert_eq!(e.records[0].segments.len(), 1);
         assert_eq!(e.records[0].segments[0].values.len(), 2);
         assert_eq!(val(0, 0, 0), (RecordValueKind::Single(185.0), Some("lb")));
-        assert_eq!(val(0, 0, 1), (RecordValueKind::List(vec![5.0, 5.0, 4.0]), None));
+        assert_eq!(
+            val(0, 0, 1),
+            (RecordValueKind::List(vec![5.0, 5.0, 4.0]), None)
+        );
 
         // dumbbell_curl 45 lb 6/6/5
         assert_eq!(e.records[1].name.text, "dumbbell_curl");
         assert_eq!(e.records[1].segments.len(), 1);
         assert_eq!(val(1, 0, 0), (RecordValueKind::Single(45.0), Some("lb")));
-        assert_eq!(val(1, 0, 1), (RecordValueKind::List(vec![6.0, 6.0, 5.0]), None));
+        assert_eq!(
+            val(1, 0, 1),
+            (RecordValueKind::List(vec![6.0, 6.0, 5.0]), None)
+        );
 
         // dumbbell_shoulder_press 65 lb 7/6/6
         assert_eq!(e.records[2].name.text, "dumbbell_shoulder_press");
         assert_eq!(e.records[2].segments.len(), 1);
         assert_eq!(val(2, 0, 0), (RecordValueKind::Single(65.0), Some("lb")));
-        assert_eq!(val(2, 0, 1), (RecordValueKind::List(vec![7.0, 6.0, 6.0]), None));
+        assert_eq!(
+            val(2, 0, 1),
+            (RecordValueKind::List(vec![7.0, 6.0, 6.0]), None)
+        );
 
         // dumbbell_press 6/5/4 25 lb, 3 20 lb  — two segments, second is a nameless continuation
         assert_eq!(e.records[3].name.text, "dumbbell_press");
         assert_eq!(e.records[3].segments.len(), 2);
         assert_eq!(e.records[3].segments[0].values.len(), 2);
-        assert_eq!(val(3, 0, 0), (RecordValueKind::List(vec![6.0, 5.0, 4.0]), None));
+        assert_eq!(
+            val(3, 0, 0),
+            (RecordValueKind::List(vec![6.0, 5.0, 4.0]), None)
+        );
         assert_eq!(val(3, 0, 1), (RecordValueKind::Single(25.0), Some("lb")));
         assert_eq!(e.records[3].segments[1].name, None);
         assert_eq!(e.records[3].segments[1].values.len(), 2);

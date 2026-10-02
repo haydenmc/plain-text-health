@@ -1,13 +1,13 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map},
     hash::Hash,
 };
 
 use crate::{
     assembler::{Assembled, Diagnostic, Location, Severity, SourceId, SourceMap},
     directives::{
-        ActivityDecl, Directive, Entry, ExerciseDecl, ExerciseSlotKind, Ident, MetricAliasDecl,
-        MetricDecl, RecordLine, RecordSegment, RecordValue, RecordValueKind, Span,
+        Directive, Entry, ExerciseDecl, ExerciseSlotKind, Ident, MetricAliasDecl, MetricDecl,
+        RecordLine, RecordSegment, RecordValue, RecordValueKind, Span,
     },
 };
 
@@ -68,10 +68,7 @@ fn error(src: SourceId, span: Span, message: String) -> Diagnostic {
     Diagnostic {
         severity: Severity::Error,
         msg: message,
-        location: Location {
-            source: src,
-            span: span,
-        },
+        location: Location { source: src, span },
     }
 }
 
@@ -107,17 +104,17 @@ fn build_symbol_table(
             // the compiler flags if we ever need to handle new ones.
             Directive::Include(_) | Directive::Entry(_) => None,
         } {
-            if symbols.contains_key(&symbol_ident.text) {
-                diagnostics.push(Diagnostic {
-                    severity: Severity::Error,
-                    msg: format!("duplicate symbol `{}`", symbol_ident.text),
-                    location: Location {
-                        source: *s,
-                        span: symbol_ident.span,
-                    },
-                });
-            } else {
-                symbols.insert(symbol_ident.text, (*s, d.clone()));
+            match symbols.entry(symbol_ident.text) {
+                hash_map::Entry::Occupied(existing) => {
+                    diagnostics.push(error(
+                        *s,
+                        symbol_ident.span,
+                        format!("duplicate symbol `{}`", existing.key()),
+                    ));
+                }
+                hash_map::Entry::Vacant(slot) => {
+                    slot.insert((*s, d.clone()));
+                }
             }
         }
     }
@@ -158,7 +155,7 @@ fn check_exercises(directives: &[(SourceId, Directive)], diagnostics: &mut Vec<D
             if !slots.insert(s) {
                 diagnostics.push(Diagnostic {
                     severity: Severity::Error,
-                    msg: format!("duplicate exercise slot value"),
+                    msg: "duplicate exercise slot value".to_string(),
                     location: Location {
                         source: d.0,
                         span: d.1.span.clone(),
@@ -236,17 +233,17 @@ impl<'s> EntryValidator<'s> {
         });
 
         // If this is an activity, confirm it has been declared
-        if let Some(a) = &e.activity {
-            if !matches!(
+        if let Some(a) = &e.activity
+            && !matches!(
                 self.symbols.get(&a.name.text),
                 Some((_, Directive::Activity(_)))
-            ) {
-                self.diagnostics.push(error(
-                    src,
-                    a.name.span.clone(),
-                    format!("`{}` is not a declared activity", a.name.text),
-                ));
-            }
+            )
+        {
+            self.diagnostics.push(error(
+                src,
+                a.name.span.clone(),
+                format!("`{}` is not a declared activity", a.name.text),
+            ));
         }
 
         // Process each record line:
@@ -310,7 +307,7 @@ impl<'s> EntryValidator<'s> {
 /// Record lines can have multiple segments. For convenience, names may be
 /// omitted from a segment, which will assume the name of a previous segment.
 /// This function groups segments together that belong to the same name.
-fn group_segments(line: &RecordLine) -> Vec<SegmentGroup> {
+fn group_segments(line: &RecordLine) -> Vec<SegmentGroup<'_>> {
     let mut groups: Vec<SegmentGroup> = Vec::new();
     for seg in &line.segments {
         match &seg.name {
@@ -345,14 +342,14 @@ fn metric_observation(
         return Err(error(
             src,
             g.segments[1].span.clone(),
-            format!("every measurement value must be named"),
+            "every measurement value must be named".to_string(),
         ));
     };
     if seg.values.len() != 1 {
         return Err(error(
             src,
             seg.span.clone(),
-            format!("segments must have only one value"),
+            "segments must have only one value".to_string(),
         ));
     }
     let RecordValueKind::Single(n) = seg.values[0].value else {
@@ -362,17 +359,17 @@ fn metric_observation(
             format!("`{}` takes a single value", m.name.text),
         ));
     };
-    if let Some(u) = &seg.values[0].unit {
-        if u.text != m.unit.text {
-            return Err(error(
-                src,
-                u.span.clone(),
-                format!(
-                    "`{}` stated with `{}` units, expected `{}`",
-                    m.name.text, u.text, m.unit.text
-                ),
-            ));
-        }
+    if let Some(u) = &seg.values[0].unit
+        && u.text != m.unit.text
+    {
+        return Err(error(
+            src,
+            u.span.clone(),
+            format!(
+                "`{}` stated with `{}` units, expected `{}`",
+                m.name.text, u.text, m.unit.text
+            ),
+        ));
     }
     Ok(Observation {
         event_id: event,
@@ -398,7 +395,7 @@ fn metric_alias_observation(
         return Err(error(
             src,
             g.segments[1].span.clone(),
-            format!("every measurement value must be named"),
+            "every measurement value must be named".to_string(),
         ));
     };
 
@@ -452,17 +449,17 @@ fn metric_alias_observation(
                     ),
                 ));
             };
-            if let Some(u) = &value.unit {
-                if u.text != m.unit.text {
-                    return Err(error(
-                        src,
-                        u.span.clone(),
-                        format!(
-                            "`{}` stated with `{}` units, expected `{}`",
-                            name.text, u.text, m.unit.text
-                        ),
-                    ));
-                }
+            if let Some(u) = &value.unit
+                && u.text != m.unit.text
+            {
+                return Err(error(
+                    src,
+                    u.span.clone(),
+                    format!(
+                        "`{}` stated with `{}` units, expected `{}`",
+                        name.text, u.text, m.unit.text
+                    ),
+                ));
             }
             Ok(Observation {
                 event_id: event,
@@ -631,7 +628,7 @@ fn metric_exercise_set(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::assembler::{assemble_with, MapSourceTextProvider};
+    use crate::assembler::{MapSourceTextProvider, assemble_with};
     use std::path::Path;
 
     const DECLS: &str = "\
@@ -651,7 +648,8 @@ exercise pullups reps
 
     fn run(body: &str) -> Validated {
         let main = format!("!include \"decls.fitlog\"\n{body}\n");
-        let provider = MapSourceTextProvider::new(&[("main.fitlog", &main), ("decls.fitlog", DECLS)]);
+        let provider =
+            MapSourceTextProvider::new(&[("main.fitlog", &main), ("decls.fitlog", DECLS)]);
         let asm = assemble_with(Path::new("main.fitlog"), &provider).expect("entrypoint readable");
         validate(asm)
     }
@@ -675,7 +673,12 @@ exercise pullups reps
         let [d] = &errs[..] else {
             panic!("expected exactly one error, got {errs:#?}")
         };
-        assert!(d.msg.contains(needle), "{:?} does not mention {:?}", d.msg, needle);
+        assert!(
+            d.msg.contains(needle),
+            "{:?} does not mention {:?}",
+            d.msg,
+            needle
+        );
         &v.sources.get(d.location.source).text[d.location.span.clone()]
     }
 
@@ -685,8 +688,13 @@ exercise pullups reps
     fn metric_with_stated_unit() {
         let v = run("2026-08-05 weight 178.4 lb");
         assert_clean(&v);
-        let [o] = &v.observations[..] else { panic!("expected one observation") };
-        assert_eq!((o.metric.as_str(), o.value, o.unit.as_str()), ("weight", 178.4, "lb"));
+        let [o] = &v.observations[..] else {
+            panic!("expected one observation")
+        };
+        assert_eq!(
+            (o.metric.as_str(), o.value, o.unit.as_str()),
+            ("weight", 178.4, "lb")
+        );
         assert_eq!(v.events.len(), 1);
         assert_eq!(v.events[0].activity, None);
     }
@@ -701,7 +709,10 @@ exercise pullups reps
     #[test]
     fn metric_unit_mismatch() {
         let v = run("2026-08-05 weight 80 kg");
-        assert_eq!(single_error(&v, "stated with `kg` units, expected `lb`"), "kg");
+        assert_eq!(
+            single_error(&v, "stated with `kg` units, expected `lb`"),
+            "kg"
+        );
         assert!(v.observations.is_empty());
     }
 
@@ -778,7 +789,13 @@ exercise pullups reps
         let got: Vec<_> = v
             .sets
             .iter()
-            .map(|s| (s.set_number, s.load.as_ref().map(|(n, u)| (*n, u.as_str())), s.reps))
+            .map(|s| {
+                (
+                    s.set_number,
+                    s.load.as_ref().map(|(n, u)| (*n, u.as_str())),
+                    s.reps,
+                )
+            })
             .collect();
         assert_eq!(
             got,
@@ -798,8 +815,19 @@ exercise pullups reps
   bench_press 185 lb 5
   dumbbell_curl 30 lb 8"#);
         assert_clean(&v);
-        let got: Vec<_> = v.sets.iter().map(|s| (s.set_number, s.exercise.as_str())).collect();
-        assert_eq!(got, [(1, "dumbbell_curl"), (2, "bench_press"), (3, "dumbbell_curl")]);
+        let got: Vec<_> = v
+            .sets
+            .iter()
+            .map(|s| (s.set_number, s.exercise.as_str()))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                (1, "dumbbell_curl"),
+                (2, "bench_press"),
+                (3, "dumbbell_curl")
+            ]
+        );
     }
 
     #[test]
@@ -808,7 +836,9 @@ exercise pullups reps
   bench_press 185 lb 5, 175 lb
   dumbbell_curl 30 lb 10"#);
         single_error(&v, "missing `reps`");
-        let [s] = &v.sets[..] else { panic!("expected one set") };
+        let [s] = &v.sets[..] else {
+            panic!("expected one set")
+        };
         assert_eq!((s.exercise.as_str(), s.set_number), ("dumbbell_curl", 1));
     }
 

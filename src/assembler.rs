@@ -1,6 +1,8 @@
 use core::fmt;
+#[cfg(test)]
+use std::collections::HashMap;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fs, io,
     path::{Path, PathBuf},
 };
@@ -51,14 +53,12 @@ pub struct Location {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
     Error,
-    Warning,
 }
 
 impl fmt::Display for Severity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Severity::Error => "error",
-            Severity::Warning => "warning",
         })
     }
 }
@@ -106,14 +106,22 @@ impl SourceTextProvider for DiskSourceTextProvider {
 /// An implementation of SourceTextProvider that reads files from a hashmap
 /// keyed by file path. Useful for test scenarios where we don't want to hit the
 /// actual disk.
+#[cfg(test)]
 pub(crate) struct MapSourceTextProvider(HashMap<PathBuf, String>);
 
+#[cfg(test)]
 impl MapSourceTextProvider {
-    pub(crate) fn new(files: &[(&str, & str)]) -> Self {
-        Self(files.iter().map(|(p, t)| (PathBuf::from(p), t.to_string())).collect())
+    pub(crate) fn new(files: &[(&str, &str)]) -> Self {
+        Self(
+            files
+                .iter()
+                .map(|(p, t)| (PathBuf::from(p), t.to_string()))
+                .collect(),
+        )
     }
 }
 
+#[cfg(test)]
 impl SourceTextProvider for MapSourceTextProvider {
     fn read(&self, path: &Path) -> io::Result<String> {
         self.0
