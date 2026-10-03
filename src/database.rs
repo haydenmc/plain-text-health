@@ -1,4 +1,4 @@
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, params, types::Value};
 
 use crate::validator::{Event, Observation, Set, Validated};
 
@@ -125,6 +125,31 @@ pub fn build_database(v: &Validated) -> rusqlite::Result<Connection> {
     tx.commit()?;
 
     Ok(conn)
+}
+
+/// Stores results of an arbitrary SQL query
+pub struct QueryResult {
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<Value>>,
+}
+
+/// Runs an SQL query against the given database connection and returns the result
+pub fn run_query(conn: &Connection, sql: &str) -> rusqlite::Result<QueryResult> {
+    let mut statement = conn.prepare(sql)?;
+    let columns: Vec<String> = statement
+        .column_names()
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let ncols = columns.len();
+
+    let rows = statement
+        .query_map([], |row| {
+            (0..ncols).map(|i| row.get::<_, Value>(i)).collect()
+        })?
+        .collect::<rusqlite::Result<Vec<Vec<Value>>>>()?;
+
+    Ok(QueryResult { columns, rows })
 }
 
 #[cfg(test)]
@@ -301,5 +326,19 @@ exercise bench_press load reps
                 .unwrap();
             assert_eq!(orphans, 0, "orphaned rows in {table}");
         }
+    }
+
+    #[test]
+    fn run_query_returns_columns_and_typed_values() {
+        let conn = db("2026-08-05 weight 178.4\n2026-08-06 weight 177.9");
+        let r = run_query(&conn, "SELECT metric, value FROM observations ORDER BY value").unwrap();
+        assert_eq!(r.columns, ["metric", "value"]);
+        assert_eq!(
+            r.rows,
+            [
+                vec![Value::Text("weight".into()), Value::Real(177.9)],
+                vec![Value::Text("weight".into()), Value::Real(178.4)],
+            ]
+        );
     }
 }

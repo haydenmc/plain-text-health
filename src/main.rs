@@ -1,17 +1,23 @@
 mod assembler;
+mod database;
 mod directives;
 mod lexer;
 mod parser;
 mod validator;
-mod database;
 
-use std::{path::{Path, PathBuf}, process::ExitCode};
+use std::{
+    path::{Path, PathBuf},
+    process::ExitCode,
+};
 
 use clap::{Parser, Subcommand};
+use comfy_table::{Table, presets::UTF8_FULL};
+use rusqlite::types::Value;
 
 use crate::{
     assembler::{Diagnostic, Severity, SourceMap},
-    validator::validate,
+    database::QueryResult,
+    validator::{Validated, validate},
 };
 
 #[derive(Parser, Debug)]
@@ -26,6 +32,12 @@ enum Command {
     Check {
         #[arg(env = "PTH_FILE")]
         file: PathBuf,
+    },
+    Query {
+        #[arg(env = "PTH_FILE")]
+        file: PathBuf,
+        #[arg()]
+        sql: String,
     },
 }
 
@@ -54,26 +66,82 @@ fn render_diagnostics(source_map: &SourceMap, diagnostics: &Vec<Diagnostic>) {
     }
 }
 
-fn check(file: &Path) -> ExitCode {
-    let assembled = match assembler::assemble(file) {
-        Ok(a) => a,
-        Err(e) => {
-            eprintln!("pth: cannot read `{}`: {e}", file.display());
-            return ExitCode::FAILURE;
-        }
-    };
+/// Loads, parses, assembles, and validates a given .fitlog file path
+fn load(file: &Path) -> Result<Validated, ExitCode> {
+    let asm = assembler::assemble(file).map_err(|e| {
+        eprintln!("pth: cannot read `{}`: {e}", file.display());
+        ExitCode::FAILURE
+    })?;
+    Ok(validate(asm))
+}
 
-    let v = validate(assembled);
-    render_diagnostics(&v.sources, &v.diagnostics);
-
-    if v.diagnostics
+/// Determines if any of the given diagnostics are Error-level, and should halt
+/// processing
+fn any_errors(diagnostics: &Vec<Diagnostic>) -> bool {
+    diagnostics
         .iter()
         .any(|d| matches!(d.severity, Severity::Error))
-    {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
+}
+
+/// Converts a rusqlite value to something printable
+fn display_value(v: &Value) -> String {
+    match v {
+        Value::Null => "NULL".to_string(),
+        Value::Integer(n) => n.to_string(),
+        Value::Real(f) => f.to_string(),
+        Value::Text(s) => s.clone(),
+        Value::Blob(b) => format!("<{} bytes>", b.len()),
     }
+}
+
+/// Renders a table of the given SQLite query result data using comfy_table
+fn render_table(result: &QueryResult) -> Table {
+    let mut table = Table::new();
+    table.load_style(UTF8_FULL);
+    table.set_header(&result.columns);
+    for row in &result.rows {
+        table.add_row(row.iter().map(display_value));
+    }
+    table
+}
+
+/// CLI command to run a simple check on the given .fitlog path. Will print any
+/// diagnostics and return an error code if there are any errors.
+fn check(file: &Path) -> ExitCode {
+    let Ok(v) = load(file) else {
+        return ExitCode::FAILURE;
+    };
+    render_diagnostics(&v.sources, &v.diagnostics);
+
+    if any_errors(&v.diagnostics) {
+        return ExitCode::FAILURE;
+    }
+
+    ExitCode::SUCCESS
+}
+
+/// CLI command to run an SQL query against the .fitlog SQLite database.
+fn query(file: &Path, sql: &String) -> ExitCode {
+    let Ok(v) = load(file) else {
+        return ExitCode::FAILURE;
+    };
+    render_diagnostics(&v.sources, &v.diagnostics);
+
+    if any_errors(&v.diagnostics) {
+        return ExitCode::FAILURE;
+    }
+
+    let result =
+        match database::build_database(&v).and_then(|conn| database::run_query(&conn, &sql)) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("pth: {e}");
+                return ExitCode::FAILURE;
+            }
+        };
+
+    println!("{}", render_table(&result));
+    ExitCode::SUCCESS
 }
 
 fn main() -> ExitCode {
@@ -83,5 +151,6 @@ fn main() -> ExitCode {
 
     match &args.command {
         Command::Check { file } => check(file),
+        Command::Query { file, sql } => query(file, sql),
     }
 }
