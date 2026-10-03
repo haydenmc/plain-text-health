@@ -3,7 +3,7 @@ mod directives;
 mod lexer;
 mod parser;
 mod validator;
-mod tables;
+mod database;
 
 use std::{path::{Path, PathBuf}, process::ExitCode};
 
