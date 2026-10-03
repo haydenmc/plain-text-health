@@ -14,6 +14,12 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EventId(u32);
 
+impl EventId {
+    pub fn get(self) -> u32 {
+        self.0
+    }
+}
+
 pub type SymbolTable = HashMap<String, (SourceId, Directive)>;
 
 /// Intermediary data used to group segments by name
