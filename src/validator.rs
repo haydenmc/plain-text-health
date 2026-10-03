@@ -46,6 +46,7 @@ pub struct Event {
     pub description: Option<String>,
     pub tags: Vec<String>,
     pub metadata: Vec<(String, String)>,
+    #[expect(dead_code, reason = "diagnostic data, not yet used/exposed")]
     pub location: Location,
 }
 
@@ -55,6 +56,7 @@ pub struct Observation {
     pub metric: String,
     pub value: f64,
     pub unit: String,
+    #[expect(dead_code, reason = "diagnostic data, not yet used/exposed")]
     pub location: Location,
 }
 
@@ -67,6 +69,7 @@ pub struct Set {
     pub reps: Option<f64>,
     pub duration: Option<(f64, String)>,
     pub distance: Option<(f64, String)>,
+    #[expect(dead_code, reason = "diagnostic data, not yet used/exposed")]
     pub location: Location,
 }
 

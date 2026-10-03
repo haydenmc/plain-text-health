@@ -1,6 +1,6 @@
 use rusqlite::{Connection, params, types::Value};
 
-use crate::validator::{Event, Observation, Set, Validated};
+use crate::validator::Validated;
 
 const SCHEMA: &str = "
 CREATE TABLE events (
@@ -331,7 +331,11 @@ exercise bench_press load reps
     #[test]
     fn run_query_returns_columns_and_typed_values() {
         let conn = db("2026-08-05 weight 178.4\n2026-08-06 weight 177.9");
-        let r = run_query(&conn, "SELECT metric, value FROM observations ORDER BY value").unwrap();
+        let r = run_query(
+            &conn,
+            "SELECT metric, value FROM observations ORDER BY value",
+        )
+        .unwrap();
         assert_eq!(r.columns, ["metric", "value"]);
         assert_eq!(
             r.rows,

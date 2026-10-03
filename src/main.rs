@@ -77,7 +77,7 @@ fn load(file: &Path) -> Result<Validated, ExitCode> {
 
 /// Determines if any of the given diagnostics are Error-level, and should halt
 /// processing
-fn any_errors(diagnostics: &Vec<Diagnostic>) -> bool {
+fn any_errors(diagnostics: &[Diagnostic]) -> bool {
     diagnostics
         .iter()
         .any(|d| matches!(d.severity, Severity::Error))
@@ -121,7 +121,7 @@ fn check(file: &Path) -> ExitCode {
 }
 
 /// CLI command to run an SQL query against the .fitlog SQLite database.
-fn query(file: &Path, sql: &String) -> ExitCode {
+fn query(file: &Path, sql: &str) -> ExitCode {
     let Ok(v) = load(file) else {
         return ExitCode::FAILURE;
     };
@@ -131,14 +131,14 @@ fn query(file: &Path, sql: &String) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let result =
-        match database::build_database(&v).and_then(|conn| database::run_query(&conn, &sql)) {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("pth: {e}");
-                return ExitCode::FAILURE;
-            }
-        };
+    let result = match database::build_database(&v).and_then(|conn| database::run_query(&conn, sql))
+    {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("pth: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
 
     println!("{}", render_table(&result));
     ExitCode::SUCCESS

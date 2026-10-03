@@ -38,6 +38,7 @@ impl SourceMap {
         &self.sources[id.0 as usize]
     }
 
+    #[cfg(test)] // to silence warning about unused code
     pub fn len(&self) -> usize {
         self.sources.len()
     }

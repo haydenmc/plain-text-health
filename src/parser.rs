@@ -706,7 +706,6 @@ pub fn parse(src: &str) -> (Vec<Directive>, Vec<ParseError>) {
 
 #[cfg(test)]
 mod tests {
-    use log::Record;
 
     use crate::{
         directives::{Directive, ExerciseSlotKind, RecordValueKind},

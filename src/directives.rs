@@ -123,7 +123,7 @@ pub enum RecordValueKind {
 /// directives that define what sort of data can be recorded.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Entry {
-    pub date: (u16, u8, u8), // YYYY, MM, DD
+    pub date: (u16, u8, u8),    // YYYY, MM, DD
     pub time: Option<(u8, u8)>, // HH, MM
     pub activity: Option<ActivityHeader>,
     pub records: Vec<RecordLine>,

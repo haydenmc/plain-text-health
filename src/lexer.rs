@@ -99,11 +99,7 @@ mod tests {
     fn lex_metric_definition() {
         assert_eq!(
             lex_tokens("metric weight lb"),
-            [
-                Token::Word,
-                Token::Word,
-                Token::Word,
-            ]
+            [Token::Word, Token::Word, Token::Word,]
         )
     }
 
@@ -124,18 +120,7 @@ mod tests {
                 "2026-08-05 08:12 weight 178.4 lb, bodyfat 18.2 %\n  document: \"assets/2026/2026-08-05-progress.jpg\""
             ),
             [
-                Date,
-                Time,
-                Word,
-                Number,
-                Word,
-                Comma,
-                Word,
-                Number,
-                Word,
-                Newline,
-                Word,
-                Colon,
+                Date, Time, Word, Number, Word, Comma, Word, Number, Word, Newline, Word, Colon,
                 Str
             ]
         )
@@ -167,27 +152,8 @@ mod tests {
   document: "assets/2026/gpx/2026-08-05-cougar.gpx""#
             ),
             [
-                Date,
-                Word,
-                Str,
-                Tag,
-                Tag,
-                Newline,
-                Word,
-                Number,
-                Word,
-                Comma,
-                Word,
-                Number,
-                Word,
-                Newline,
-                Word,
-                Number,
-                Word,
-                Newline,
-                Word,
-                Colon,
-                Str
+                Date, Word, Str, Tag, Tag, Newline, Word, Number, Word, Comma, Word, Number, Word,
+                Newline, Word, Number, Word, Newline, Word, Colon, Str
             ]
         );
     }
