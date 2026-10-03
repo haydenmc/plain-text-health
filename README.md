@@ -268,11 +268,7 @@ Example:
 plain-text-health reads in the complete contents of the entrypoint `.fitlog`
 file, as well as any files referenced by include statements. It parses all of
 the data contained within (while running basic consistency checks) and populates
-an in-memory [Apache Arrow](https://arrow.apache.org/) data store with the
-information.
-
-Queries can then be executed on this data using
-[DataFusion](https://datafusion.apache.org/).
+an in-memory SQLite data store with the information.
 
 Tools can then be built on top of this data foundation to provide dashboards,
 insights, and import tools to pull health data from other applications and
