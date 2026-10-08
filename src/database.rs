@@ -277,15 +277,15 @@ exercise bench_press load reps
     fn sets_store_values_units_and_nulls() {
         let conn = db("2026-08-05 lift\n  bench_press 185 lb 5/5/4");
         assert_eq!(count(&conn, "sets"), 3);
-
-        let row: (
+        type SetRow = (
             i64,
             Option<f64>,
             Option<String>,
             Option<f64>,
             Option<f64>,
             Option<String>,
-        ) = conn
+        );
+        let row: SetRow = conn
             .query_row(
                 "SELECT set_number, load, load_unit, reps, duration, distance_unit
                  FROM sets WHERE set_number = 3",
