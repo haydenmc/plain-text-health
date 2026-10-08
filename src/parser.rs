@@ -792,7 +792,7 @@ mod tests {
             panic!("expected one metric alias, got {dirs:#?}")
         };
         assert_eq!(m.name.text, "bp");
-        assert_eq!(m.composed_metric_names.get(0).unwrap().text, "bp_sys");
+        assert_eq!(m.composed_metric_names.first().unwrap().text, "bp_sys");
         assert_eq!(m.composed_metric_names.get(1).unwrap().text, "bp_dia");
     }
 
@@ -803,7 +803,7 @@ mod tests {
             panic!("expected one metric alias, got {dirs:#?}")
         };
         assert_eq!(m.name.text, "crazy");
-        assert_eq!(m.composed_metric_names.get(0).unwrap().text, "one");
+        assert_eq!(m.composed_metric_names.first().unwrap().text, "one");
         assert_eq!(m.composed_metric_names.get(1).unwrap().text, "two");
         assert_eq!(m.composed_metric_names.get(2).unwrap().text, "three");
         assert_eq!(m.composed_metric_names.get(3).unwrap().text, "four");
