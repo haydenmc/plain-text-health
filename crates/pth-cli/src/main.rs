@@ -6,7 +6,7 @@ use std::{
 use clap::{Parser, Subcommand};
 use comfy_table::{Table, presets::UTF8_FULL};
 
-use pth_core::{Diagnostic, QueryResult, Severity, SourceMap, Validated, database, load};
+use pth_core::{Diagnostic, QueryResult, Severity, SourceMap, database, load};
 use rusqlite::types::Value;
 
 #[derive(Parser, Debug)]
