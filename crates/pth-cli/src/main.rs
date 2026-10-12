@@ -1,10 +1,3 @@
-mod assembler;
-mod database;
-mod directives;
-mod lexer;
-mod parser;
-mod validator;
-
 use std::{
     path::{Path, PathBuf},
     process::ExitCode,
@@ -12,13 +5,9 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use comfy_table::{Table, presets::UTF8_FULL};
-use rusqlite::types::Value;
 
-use crate::{
-    assembler::{Diagnostic, Severity, SourceMap},
-    database::QueryResult,
-    validator::{Validated, validate},
-};
+use pth_core::{Diagnostic, QueryResult, Severity, SourceMap, database, load};
+use rusqlite::types::Value;
 
 #[derive(Parser, Debug)]
 #[command(name = "pth", version, about)]
@@ -64,15 +53,6 @@ fn render_diagnostics(source_map: &SourceMap, diagnostics: &Vec<Diagnostic>) {
             d.msg
         );
     }
-}
-
-/// Loads, parses, assembles, and validates a given .fitlog file path
-fn load(file: &Path) -> Result<Validated, ExitCode> {
-    let asm = assembler::assemble(file).map_err(|e| {
-        eprintln!("pth: cannot read `{}`: {e}", file.display());
-        ExitCode::FAILURE
-    })?;
-    Ok(validate(asm))
 }
 
 /// Determines if any of the given diagnostics are Error-level, and should halt
