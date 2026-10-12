@@ -3,6 +3,8 @@ use axum::{Router, http::header, routing::get};
 const INDEX_HTML: &str = include_str!("../static/index.html");
 const APP_JS: &str = include_str!("../static/app.js");
 const STYLE_CSS: &str = include_str!("../static/style.css");
+const INTER: &[u8] = include_bytes!("../static/fonts/InterVariable.woff2");
+const INTER_ITALIC: &[u8] = include_bytes!("../static/fonts/InterVariable-Italic.woff2");
 
 #[tokio::main]
 async fn main() {
@@ -32,6 +34,30 @@ async fn main() {
                 (
                     [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
                     STYLE_CSS,
+                )
+            }),
+        )
+        .route(
+            "/fonts/InterVariable.woff2",
+            get(|| async {
+                (
+                    [
+                        (header::CONTENT_TYPE, "font/woff2"),
+                        (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+                    ],
+                    INTER,
+                )
+            }),
+        )
+        .route(
+            "/fonts/InterVariable-Italic.woff2",
+            get(|| async {
+                (
+                    [
+                        (header::CONTENT_TYPE, "font/woff2"),
+                        (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+                    ],
+                    INTER_ITALIC,
                 )
             }),
         );

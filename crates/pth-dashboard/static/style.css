@@ -1,3 +1,62 @@
-h1 {
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("/fonts/InterVariable.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Inter";
     font-style: italic;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("/fonts/InterVariable-Italic.woff2") format("woff2");
+}
+
+:root {
+    --background-rgb: 8, 8, 8;
+    --foreground-rgb: 255, 255, 255;
+    --background-color: rgb(var(--background-rgb));
+    --foreground-color: rgb(var(--foreground-rgb));
+    --accent-hue: 200;
+    --accent-color: hsl(var(--accent-hue), 100%, 60%);
+    --table-padding: 12px;
+    --table-border-color: color-mix(in srgb, var(--foreground-color) 20%, var(--background-color));
+    font-family: "Inter", system-ui, sans-serif;
+}
+
+body {
+    display: grid;
+    grid-template-columns: 240px auto;
+    background-color: var(--background-color);
+    color: var(--foreground-color);
+    margin: 0;
+}
+
+h1 {
+    font-size: 24px;
+    font-weight: 900;
+    margin: 16px 8px;
+}
+
+nav {
+    border-right: 2px solid #000;
+}
+
+nav > ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+nav > ul > li > a {
+    display: block;
+    padding: 12px 8px;
+    color: var(--accent-color);
+    font-weight: bold;
+    text-decoration: none;
+}
+
+nav > ul > li > a:hover {
+    background-color: rgba(var(--foreground-rgb), 0.1);
 }
