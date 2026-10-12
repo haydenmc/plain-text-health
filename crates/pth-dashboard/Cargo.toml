@@ -1,0 +1,12 @@
+[package]
+name = "pth-dashboard"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "pth-dashboard"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.8.9"
+tokio = { version = "1.53.2", features = ["macros", "rt-multi-thread"] }
