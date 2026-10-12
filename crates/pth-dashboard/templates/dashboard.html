@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} · pth{% endblock %}
+
+{% block head %}
+{% endblock %}
+
+{% block main %}
+    <h1>{{ title }}</h1>
+    {% for panel in panels %}
+        <section> ... </section>
+    {% endfor %}
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        for (const el of document.querySelectorAll(".chart")) { /* vegaEmbed loop */ }
+    </script>
+{% endblock %}

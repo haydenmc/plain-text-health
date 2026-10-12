@@ -1,0 +1,26 @@
+title = "Activities"
+
+[[panel]]
+title = "Exercises"
+sql = """
+SELECT s.exercise,
+       count(DISTINCT s.event_id) AS sessions,
+       count(*) AS sets,
+       sum(s.reps) AS total_reps,
+       max(e.date) AS last_done
+FROM sets s JOIN events e ON e.id = s.event_id
+GROUP BY s.exercise
+ORDER BY last_done DESC
+"""
+
+[[panel]]
+title = "Sessions per week"
+sql = """
+SELECT date(e.date, 'weekday 0', '-6 days') AS week,
+       e.activity,
+       count(*) AS sessions
+FROM events e
+WHERE e.activity IS NOT NULL
+GROUP BY week, e.activity
+ORDER BY week DESC, e.activity
+"""

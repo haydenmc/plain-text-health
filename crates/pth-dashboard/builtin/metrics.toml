@@ -1,0 +1,18 @@
+title = "Metrics"
+
+[[panel]]
+title = "All metrics"
+sql = """
+SELECT o.metric, o.unit,
+       (SELECT o2.value FROM observations o2 JOIN events e2 ON e2.id = o2.event_id
+        WHERE o2.metric = o.metric
+        ORDER BY e2.date DESC, e2.time DESC LIMIT 1) AS latest,
+       count(*) AS readings,
+       min(e.date) AS first,
+       max(e.date) AS last,
+       min(o.value) AS lowest,
+       max(o.value) AS highest
+FROM observations o JOIN events e ON e.id = o.event_id
+GROUP BY o.metric, o.unit
+ORDER BY o.metric
+"""

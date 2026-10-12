@@ -8,5 +8,11 @@ name = "pth-dashboard"
 path = "src/main.rs"
 
 [dependencies]
+askama = "0.16.1"
 axum = "0.8.9"
+clap.workspace = true
+pth-core = { path = "../pth-core" }
+rusqlite.workspace = true
+serde = { version = "1.0.229", features = ["derive"] }
 tokio = { version = "1.53.2", features = ["macros", "rt-multi-thread"] }
+toml = "1.1.8"

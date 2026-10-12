@@ -1,0 +1,21 @@
+title = "Raw data"
+
+[[panel]]
+title = "events"
+sql = "SELECT * FROM events ORDER BY date DESC, time DESC LIMIT 100"
+
+[[panel]]
+title = "observations"
+sql = "SELECT * FROM observations ORDER BY event_id DESC LIMIT 100"
+
+[[panel]]
+title = "sets"
+sql = "SELECT * FROM sets ORDER BY event_id DESC, set_number LIMIT 100"
+
+[[panel]]
+title = "event_tags"
+sql = "SELECT * FROM event_tags ORDER BY event_id DESC LIMIT 100"
+
+[[panel]]
+title = "event_metadata"
+sql = "SELECT * FROM event_metadata ORDER BY event_id DESC LIMIT 100"

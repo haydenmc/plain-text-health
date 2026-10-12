@@ -1,0 +1,15 @@
+title = "Recent"
+
+[[panel]]
+title = "Latest entries"
+sql = """
+SELECT e.date, e.time,
+       coalesce(e.activity, 'measurement') AS kind,
+       e.description,
+       (SELECT group_concat(tag, ', ') FROM event_tags t WHERE t.event_id = e.id) AS tags,
+       (SELECT count(*) FROM observations o WHERE o.event_id = e.id) AS measurements,
+       (SELECT count(*) FROM sets s WHERE s.event_id = e.id) AS sets
+FROM events e
+ORDER BY e.date DESC, e.time DESC
+LIMIT 25
+"""

@@ -60,3 +60,12 @@ nav > ul > li > a {
 nav > ul > li > a:hover {
     background-color: rgba(var(--foreground-rgb), 0.1);
 }
+
+nav > ul > li > a[aria-current='page'] {
+    color: var(--background-color);
+    background-color: var(--foreground-color);
+}
+
+nav > ul > li > a:active {
+    background-color: rgba(var(--foreground-rgb), 0.4);
+}

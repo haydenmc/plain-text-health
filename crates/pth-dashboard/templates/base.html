@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}pth{% endblock %}</title>
+    <link href="/style.css" rel="stylesheet" />
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav>
+        <h1>❤️ PTH</h1>
+        <ul>
+            {% for link in nav.dashboards %}
+                <li><a href="/dashboards/{{ link.slug }}"
+                    {% if link.slug == nav.current %}aria-current="page"{% endif %}>
+                    {{ link.title }}
+                </a></li>
+            {% endfor %}
+        </ul>
+    </nav>
+    <main>
+        {% block main %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
