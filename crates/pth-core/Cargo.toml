@@ -1,0 +1,8 @@
+[package]
+name = "pth-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+logos = "0.16.1"
+rusqlite.workspace = true
