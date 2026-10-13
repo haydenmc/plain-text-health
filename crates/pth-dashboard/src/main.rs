@@ -2,7 +2,7 @@ use std::{
     io::{self},
     path::PathBuf,
     process::ExitCode,
-    sync::{Arc, LazyLock, Mutex},
+    sync::{Arc, Mutex},
 };
 
 use askama::Template;
@@ -18,7 +18,6 @@ use pth_core::QueryResult;
 use rusqlite::Connection;
 use serde::Deserialize;
 
-const INDEX_HTML: &str = include_str!("../static/index.html");
 const APP_JS: &str = include_str!("../static/app.js");
 const STYLE_CSS: &str = include_str!("../static/style.css");
 const INTER: &[u8] = include_bytes!("../static/fonts/InterVariable.woff2");
@@ -31,14 +30,6 @@ const BUILTIN_SOURCES: &[(&str, &str)] = &[
     ("activities", include_str!("../builtin/activities.toml")),
     ("data", include_str!("../builtin/data.toml")),
 ];
-static BUILTINS: LazyLock<Vec<Dashboard>> = LazyLock::new(|| {
-    BUILTIN_SOURCES
-        .iter()
-        .map(|(_, text)| {
-            toml::from_str(text).expect("built-in dashboards are tested prior to release")
-        })
-        .collect()
-});
 
 #[derive(Parser, Debug)]
 #[command(name = "pth-dashboard", version)]
